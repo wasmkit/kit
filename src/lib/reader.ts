@@ -11,7 +11,7 @@ export class ByteReader {
     public at = 0;
 
     public constructor(bytes: Uint8Array) {
-        this._bytes = new Uint8Array(bytes);
+        this._bytes = bytes;
     }
 
     public u8() {

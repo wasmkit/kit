@@ -21,18 +21,18 @@ export class Kit {
     private _moduleReprs: MapByModuleCtor;
     
     private constructor(bytes: Uint8Array) {
-        this.bytes = bytes;
+        this.bytes = new Uint8Array(bytes);
         this._moduleReprs = new Map();
     }
 
-    public as<T extends Module>(repr: ModuleCtor<T>, options?: any): T {
-        if (this._moduleReprs.has(repr)) {
-            return this._moduleReprs.get(repr);
+    public as<T extends Module>(Repr: ModuleCtor<T>, options?: any): T {
+        if (this._moduleReprs.has(Repr)) {
+            return this._moduleReprs.get(Repr);
         }
 
-        const mod = new repr(this, options);
+        const mod = new Repr(this, options);
 
-        this._moduleReprs.set(repr, mod);
+        this._moduleReprs.set(Repr, mod);
 
         return mod;
     }

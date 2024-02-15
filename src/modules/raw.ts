@@ -44,13 +44,14 @@ export class RawModule extends Module {
     private _extract(): void {
         const r = new ByteReader(this.kit.bytes);
 
-        this.assert(r.u32() !== FILE_MAGIC, "Invalid file magic");
-        this.assert(r.u32() !== FILE_VERSION, "Invalid file version");
+        this.assert(r.u32() === FILE_MAGIC, "Invalid file magic");
+        this.assert(r.u32() === FILE_VERSION, "Invalid file version");
 
         while (r.isEOF() === false) {
             const id = r.u8();
             const size = r.vu32();
 
+            console.log(id, size);
 
             this.assert(id < RawSectionIds.kMax, "Invalid section id", r.at, id);
 
