@@ -1,8 +1,10 @@
 import { Kit } from "../kit";
 import { ByteReader } from "../lib/reader";
-import { Module } from "../module";
+import { AbstractModule } from "../module";
 
-export enum RawSectionIds {
+export namespace raw {
+
+export enum SectionId {
     custom =        0,
     signature =     1,
     import =        2,
@@ -21,25 +23,25 @@ export enum RawSectionIds {
     kMax
 }
 
-export type RawSectionNames = Exclude<keyof typeof RawSectionIds, "kMax">;
+export type SectionName = Exclude<keyof typeof SectionId, "kMax">;
 
-type RawKnownSectionNames = Exclude<RawSectionNames, "custom">;
+export type KnownSectionName = Exclude<SectionName, "custom">;
 
-type RawSections = Record<
-    RawKnownSectionNames, Uint8Array | null
-> & { custom: Map<string, Uint8Array> }
+type Sections = Record<
+    KnownSectionName, Uint8Array | null
+> & { custom: Map<string, Uint8Array> };
 
 const FILE_MAGIC = 0x6D736100;
 const FILE_VERSION = 0x1;
 
-interface RawMetadata {
+interface Metadata {
     magic: typeof FILE_MAGIC;
     version: typeof FILE_VERSION;
 }
 
-export class RawModule extends Module {
-    public readonly sections: RawSections;
-    public readonly metadata: RawMetadata;
+export class Module extends AbstractModule {
+    public readonly sections: Sections;
+    public readonly metadata: Metadata;
 
     private _extract(): void {
         const r = new ByteReader(this.kit.bytes);
@@ -51,12 +53,10 @@ export class RawModule extends Module {
             const id = r.u8();
             const size = r.vu32();
 
-            console.log(id, size);
-
-            this.assert(id < RawSectionIds.kMax, "Invalid section id", r.at, id);
+            this.assert(id < SectionId.kMax, "Invalid section id", r.at, id);
 
             if (id !== 0) {
-                const name = RawSectionIds[id] as RawKnownSectionNames;
+                const name = SectionId[id] as KnownSectionName;
 
                 this.assert(this.sections[name] === null, "Duplicate section id", r.at, id);
 
@@ -103,4 +103,6 @@ export class RawModule extends Module {
 
         this._extract();
     }
+}
+
 }

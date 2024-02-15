@@ -1,10 +1,10 @@
 import { Kit } from "./kit";
 
 export type ModuleCtor<
-    T extends Module = Module
+    T extends AbstractModule = AbstractModule
 > = new (kit: Kit, options?: any) => T;
 
-export abstract class Module {
+export abstract class AbstractModule {
     protected kit: Kit;
     protected options?: any;
 
