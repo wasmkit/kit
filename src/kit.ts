@@ -1,3 +1,4 @@
+import { BinaryLike, getBytesFromBinary } from "./lib/binary";
 import { Module, ModuleCtor } from "./module";
 import { RawModule } from "./modules/raw";
 import { WasmModule } from "./modules/wasm";
@@ -8,26 +9,30 @@ interface MapByModuleCtor extends Map<ModuleCtor, Module> {
 }  
 
 export class Kit {
-    public static fromBinary(buffer: Uint8Array): Kit {
-        return new Kit(buffer);
+    public static async fromBinary(binary: BinaryLike): Promise<Kit> {
+        return Kit.fromBytes(await getBytesFromBinary(binary));
     }
 
-    private buffer: Uint8Array;
-    private moduleReprs: MapByModuleCtor;
+    public static fromBytes(bytes: Uint8Array): Kit {
+        return new Kit(bytes);
+    }
+
+    public bytes: Uint8Array;
+    private _moduleReprs: MapByModuleCtor;
     
-    private constructor(buffer: Uint8Array) {
-        this.buffer = buffer;
-        this.moduleReprs = new Map();
+    private constructor(bytes: Uint8Array) {
+        this.bytes = bytes;
+        this._moduleReprs = new Map();
     }
 
     public as<T extends Module>(repr: ModuleCtor<T>, options?: any): T {
-        if (this.moduleReprs.has(repr)) {
-            return this.moduleReprs.get(repr);
+        if (this._moduleReprs.has(repr)) {
+            return this._moduleReprs.get(repr);
         }
 
         const mod = new repr(this, options);
 
-        this.moduleReprs.set(repr, mod);
+        this._moduleReprs.set(repr, mod);
 
         return mod;
     }
