@@ -9,3 +9,4 @@ Types in wasm will be called signatres
 `bytes` ALWAYS refers to Uint8Array
 `buffer` ALWAYS refer to ArrayBuffer
 `binary` may refer BinaryLike (see lib/binary.ts)
+ALL private methods or members must be prefixed by a `_`
