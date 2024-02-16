@@ -21,3 +21,14 @@ export const getBytesFromBinary = async (binary: BinaryLike): Promise<Uint8Array
 
     return Uint8Array.from(binary as number[]);
 }
+
+
+export class BytesView {
+    public bytes: Uint8Array;
+    public at: number;
+
+    public constructor(bytes: Uint8Array, at: number = 0) {
+        this.bytes = bytes;
+        this.at = at;
+    }
+}

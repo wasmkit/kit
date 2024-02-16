@@ -1,18 +1,12 @@
 import { BinaryLike, getBytesFromBinary } from "./lib/binary";
-import { AbstractModule, ModuleCtor } from "./module";
 
 import { raw } from "./formats/raw";
 import { wasm } from "./formats/wasm";
+import { AbstractFormat, FormatCtor } from "./formats/abstract";
 
-interface MapByModuleCtor extends Map<ModuleCtor, AbstractModule> {
-    get<T extends AbstractModule>(key: ModuleCtor<T>): T;
-    set<T extends AbstractModule>(key: ModuleCtor<T>, value: T): this;
-}
-
-export interface Module<Format, SourceFormat> {
-    extract?(kit: Kit, view: SourceFormat): Format;
-    compile?(kit: Kit, format: Format): SourceFormat;
-    print?(kit: Kit, format: Format): void;
+interface MapByFormatCtor extends Map<FormatCtor, AbstractFormat> {
+    get<T extends AbstractFormat>(key: FormatCtor<T>): T;
+    set<T extends AbstractFormat>(key: FormatCtor<T>, value: T): this;
 }
 
 export class Kit {
@@ -25,19 +19,14 @@ export class Kit {
     }
 
     public bytes: Uint8Array;
-    private _moduleReprs: MapByModuleCtor;
+    private _moduleReprs: MapByFormatCtor;
     
     private constructor(bytes: Uint8Array) {
         this.bytes = new Uint8Array(bytes);
         this._moduleReprs = new Map();
     }
 
-    public defineModule() {
-        
-    }
-
-
-    public as<T extends AbstractModule>(Repr: ModuleCtor<T>, options?: any): T {
+    public as<T extends AbstractFormat>(Repr: FormatCtor<T>, options?: any): T {
         if (this._moduleReprs.has(Repr)) {
             return this._moduleReprs.get(Repr);
         }
@@ -49,6 +38,6 @@ export class Kit {
         return mod;
     }
 
-    public raw(): raw.Module { return this.as(raw.Module); }
-    public wasm(): wasm.Module { return this.as(wasm.Module); }
+    public raw(): raw.Format { return this.as(raw.Format); }
+    public wasm(): wasm.Format { return this.as(wasm.Format); }
 }    

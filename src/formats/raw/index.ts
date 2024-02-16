@@ -1,7 +1,10 @@
 import { Kit } from "../../kit";
+import { BytesView } from "../../lib/binary";
+import { read } from "../../lib/reader";
+import { AbstractFormat } from "../abstract";
 
 
-export enum SectionId {
+enum SectionId {
     Custom =        0,
     Signature =     1,
     Import =        2,
@@ -16,93 +19,79 @@ export enum SectionId {
     Data =          11,
     DataCount =     12,
 
-
     kMax
 }
 
-export type SectionName = Uncapitalize<Exclude<keyof typeof SectionId, "kMax">>;
+type SectionName = Uncapitalize<Exclude<keyof typeof SectionId, "kMax">>;
+type KnownSectionName = Exclude<SectionName, "custom">;
+type SectionRecords = Record<KnownSectionName, Uint8Array | null> & { custom: Map<string, Uint8Array> };
 
-export type KnownSectionName = Exclude<SectionName, "custom">;
 
-type Sections = Record<KnownSectionName, Uint8Array | null> & { custom: Map<string, Uint8Array> };
 
 const FILE_MAGIC = 0x6D736100;
 const FILE_VERSION = 0x1;
-
 interface Metadata {
     magic: typeof FILE_MAGIC;
     version: typeof FILE_VERSION;
 }
 
-export class RawFormat {
-    public readonly sections: Sections;
-    public readonly metadata: Metadata;
-
-    public constructor() {
-        this.metadata = {
-            magic: FILE_MAGIC,
-            version: FILE_VERSION
-        }
-
-        this.sections = {
-            custom: new Map(),
-            signature: null,
-            import: null,
-            function: null,
-            table: null,
-            memory: null,
-            global: null,
-            export: null,
-            start: null,
-            element: null,
-            code: null,
-            data: null,
-            dataCount: null,
-        }
-    }
-
-    private _compile(): Uint8Array {
-        
-    }
-
-    private _extract(): void {
-        const r = new ByteReader(this.kit.bytes);
-
-        this.assert(r.u32() === FILE_MAGIC, "Invalid file magic");
-        this.assert(r.u32() === FILE_VERSION, "Invalid file version");
-
-        while (r.isEOF() === false) {
-            const id = r.u8();
-            const size = r.vu32();
-
-            this.assert(id < SectionId.kMax, "Invalid section id", r.at, id);
-
-            if (id !== 0) {
-                const name = SectionId[id] as KnownSectionName;
-
-                this.assert(this.sections[name] === null, "Duplicate section id", r.at, id);
-
-                this.sections[name] = r.bytes(size);
-
-                continue;
-            }
-
-            const end = r.at + size;
-            const name = r.string();
-
-            // Don't complain about duplicates, but we can warn
-            if (this.sections.custom.has(name)) {
-                console.warn("Duplicate custom section. Disgarding stale data");
-                console.warn(this.sections.custom.get(name)!);
-            }
-
-            this.sections.custom.set(name, r.bytes(end - r.at));
-        }
-    }
 
 
+export namespace raw {
+
+export class Format extends AbstractFormat implements SectionRecords {
+    public readonly metadata: Metadata =  {
+        magic: FILE_MAGIC,
+        version: FILE_VERSION
+    };
+
+    public custom: Map<string, Uint8Array> = new Map();
+    public signature: Uint8Array | null = null;
+    public import: Uint8Array | null = null;
+    public function: Uint8Array | null = null;
+    public table: Uint8Array | null = null;
+    public memory: Uint8Array | null = null;
+    public global: Uint8Array | null = null;
+    public export: Uint8Array | null = null;
+    public start: Uint8Array | null = null;
+    public element: Uint8Array | null = null;
+    public code: Uint8Array | null = null;
+    public data: Uint8Array | null = null;
+    public dataCount: Uint8Array | null = null;
 }
 
-const rawModuleFormat = {
+export const extract = (fmt: Format): void => {
+    const { kit } = fmt;
+    const v = new BytesView(kit.bytes);
+
+    // kit.assert(read.u32(v) === FILE_MAGIC, "Invalid file magic");
+    // kit.assert(read.u32(v) === FILE_VERSION, "Invalid file version");
+
+    while (read.isEOF(v) === false) {
+        const id = read.u8(v);
+        const size = read.vu32(v);
+        // kit.assert(id < SectionId.kMax, "Invalid section id", v.at, id);
+
+        if (id !== 0) {
+            const sectionName = SectionId[id].toLowerCase() as KnownSectionName;
+            // kit.assert(fmt[sectionName] === null, "Duplicate section id", v.at, id);
+
+            fmt[sectionName] = read.bytes(v, size);
+
+            continue;
+        }
+
+        const end = v.at + size;
+        const name = read.string(v);
+
+        // Don't complain about duplicates, but we can warn
+        if (fmt.custom.has(name)) {
+            console.warn("Duplicate custom section. Disgarding stale data");
+            console.warn(fmt.custom.get(name)!);
+        }
+
+        fmt.custom.set(name, read.bytes(v, end - v.at));
+    }
+}
 
 }
