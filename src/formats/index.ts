@@ -1,14 +1,16 @@
 import { raw } from "./raw";
 
-import { AbstractFormat } from "./abstract";
+import { AbstractFormat, FormatCtor } from "./abstract";
+import { wasm } from "./wasm";
 
-interface Format<F extends typeof AbstractFormat> {
-    Format: F;
-    extract?(fmt: InstanceType<F>): void;
-    compile?(fmt: InstanceType<F>): void;
-    print?(fmt: InstanceType<F>): any;
+export interface FormatDeclaration<F extends AbstractFormat> {
+    Format: FormatCtor<F>;
+    extract?(fmt: F): void;
+    compile?(fmt: F): void;
+    print?(fmt: F): any;
 }
 
 export default {
-    raw: raw as Format<typeof raw.Format>
+    raw: raw as FormatDeclaration<raw.Format>,
+    wasm: wasm as FormatDeclaration<wasm.Format>
 };
