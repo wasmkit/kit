@@ -17,9 +17,11 @@ export class ByteReader {
     public u8() {
         return this._bytes[this.at++];
     }
+    
     public i8() {
-        return (this.u8() << 25) >> 25;
+        return (this.u8() << 24) >> 24;
     }
+
     public u32() {
         u8.set(this._bytes.subarray(this.at, this.at += 4));
 
@@ -98,7 +100,7 @@ export class ByteReader {
     }
 
     public vector<ElementType>(elementReadFunc: () => ElementType, length = this.vu32()): ElementType[] {
-        const out = Array(length);
+        const out: ElementType[] = [];
 
         for (let i = 0; i < length; ++i) out[i] = elementReadFunc.call(this);
 
