@@ -7,7 +7,13 @@ import { wasm } from "./formats/wasm";
 interface MapByModuleCtor extends Map<ModuleCtor, AbstractModule> {
     get<T extends AbstractModule>(key: ModuleCtor<T>): T;
     set<T extends AbstractModule>(key: ModuleCtor<T>, value: T): this;
-}  
+}
+
+export interface Module<Format, SourceFormat> {
+    extract?(kit: Kit, view: SourceFormat): Format;
+    compile?(kit: Kit, format: Format): SourceFormat;
+    print?(kit: Kit, format: Format): void;
+}
 
 export class Kit {
     public static async fromBinary(binary: BinaryLike): Promise<Kit> {
@@ -25,6 +31,11 @@ export class Kit {
         this.bytes = new Uint8Array(bytes);
         this._moduleReprs = new Map();
     }
+
+    public defineModule() {
+        
+    }
+
 
     public as<T extends AbstractModule>(Repr: ModuleCtor<T>, options?: any): T {
         if (this._moduleReprs.has(Repr)) {

@@ -6,7 +6,7 @@ const f64 = new Float64Array(convo);
 const encoder = new TextEncoder();
 
 export class ByteWriter {
-    // Using arrays as byte vectors is usually faster when manually implementing a 
+    // Using arrays as byte vectors is usually faster
     private _written: number[] = [];
 
     public u8(value: number): ByteWriter {
