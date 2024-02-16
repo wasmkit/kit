@@ -13,7 +13,7 @@ export namespace read {
 export const u8 = (view: BytesView): number => view.bytes[view.at++];
 
 export const i8 = (view: BytesView): number => {
-    return (u8(view) << 25) >> 25;
+    return (u8(view) << 24) >> 24;
 }
 
 export const u32 = (view: BytesView): number => {
