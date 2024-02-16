@@ -65,7 +65,9 @@ export const extract = (fmt: Format): void => {
     const v = new BytesView(kit.bytes);
 
     // kit.assert(read.u32(v) === FILE_MAGIC, "Invalid file magic");
+    read.u32(v);
     // kit.assert(read.u32(v) === FILE_VERSION, "Invalid file version");
+    read.u32(v);
 
     while (read.isEOF(v) === false) {
         const id = read.u8(v);
