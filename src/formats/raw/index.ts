@@ -64,19 +64,19 @@ export const extract = (fmt: Format): void => {
     const { kit } = fmt;
     const v = new BytesView(kit.bytes);
 
-    // kit.assert(read.u32(v) === FILE_MAGIC, "Invalid file magic");
-    read.u32(v);
-    // kit.assert(read.u32(v) === FILE_VERSION, "Invalid file version");
-    read.u32(v);
+    console.assert(read.u32(v) === FILE_MAGIC, "Invalid file magic");
+    console.assert(read.u32(v) === FILE_VERSION, "Invalid file version");
 
     while (read.isEOF(v) === false) {
         const id = read.u8(v);
+
         const size = read.vu32(v);
-        // kit.assert(id < SectionId.kMax, "Invalid section id", v.at, id);
+
+        console.assert(id < SectionId.kMax, "Invalid section id", v.at, id);
 
         if (id !== 0) {
             const sectionName = SectionId[id].toLowerCase() as KnownSectionName;
-            // kit.assert(fmt[sectionName] === null, "Duplicate section id", v.at, id);
+            console.assert(fmt[sectionName] === null, "Duplicate section id", v.at, id);
 
             fmt[sectionName] = read.bytes(v, size);
 
