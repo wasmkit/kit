@@ -3,16 +3,16 @@ import { utf8Encode } from "./utf8";
 export type BinaryLike = { buffer: ArrayBuffer } | Blob | string | number[];
 
 export const getBytesFromBinary = async (binary: BinaryLike): Promise<Uint8Array> => {
+    if (!binary) return new Uint8Array(0);
     if (binary instanceof Uint8Array) return binary;
 
-    /** @ts-ignore */
-    const buffer = binary["buffer"];
+    const buffer = (binary as Uint8Array)["buffer"];
     if (buffer instanceof ArrayBuffer) {
         return new Uint8Array(buffer);
     }
 
-    if (buffer instanceof Blob) {
-        return new Uint8Array(await buffer.arrayBuffer());
+    if (typeof (binary as Blob)["arrayBuffer"] === "function") {
+        return new Uint8Array(await (binary as Blob).arrayBuffer());
     }
 
     if (typeof binary === "string") {
