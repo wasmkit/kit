@@ -8,6 +8,11 @@ const c_u32 = new Uint32Array(convo);
 const c_f32 = new Float32Array(convo);
 const c_f64 = new Float64Array(convo);
 
+
+export const isEOF = (view: BytesView): boolean => {
+    return view.at >= view.bytes.byteLength;
+}
+
 export const u8 = (view: BytesView): number => view.bytes[view.at++];
 
 export const i8 = (view: BytesView): number => {
@@ -91,6 +96,18 @@ export const string = (view: BytesView): string => {
     return utf8Decode(bytes(view));
 }
 
-export const isEOF = (view: BytesView): boolean => {
-    return view.at >= view.bytes.byteLength;
+export const vector = <T>(
+    view: BytesView,
+    doRead: (view: BytesView) => T
+): T[] => {
+    const length = vu32(view);
+    const data: T[] = Array(length);
+
+    for (let i = 0; i < length; ++i) {
+        data[i] = doRead(view);
+    }
+
+    return data;
 }
+
+

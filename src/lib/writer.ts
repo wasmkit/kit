@@ -121,3 +121,13 @@ export const bytes = (view: BytesView, value: Uint8Array): void => {
     view.bytes.set(value, view.at);
     view.at += value.length;
 }
+
+export const vector = <T>(
+    view: BytesView,
+    data: T[],
+    doWrite: (view: BytesView, value: T) => void
+) => {
+    const length = data.length;
+    vu32(view, length);
+    for (let i = 0; i < length; ++i) doWrite(view, data[i]);
+}
