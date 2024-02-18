@@ -1,7 +1,7 @@
-import { raw } from "./raw";
-
 import { AbstractFormat, FormatCtor } from "./abstract";
-import { wasm } from "./wasm";
+
+import * as raw from "./raw";
+import * as wasm from "./wasm";
 
 export interface FormatDeclaration<F extends AbstractFormat> {
     Format: FormatCtor<F>;

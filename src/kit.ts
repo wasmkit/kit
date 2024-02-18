@@ -1,8 +1,8 @@
 import { BinaryLike, getBytesFromBinary } from "./lib/binary";
 
 import fmt, { FormatDeclaration } from "./formats/"
-import { raw } from "./formats/raw";
-import { wasm } from "./formats/wasm";
+import * as raw from "./formats/raw";
+import * as wasm from "./formats/wasm";
 import { AbstractFormat, FormatCtor } from "./formats/abstract";
 
 interface MapByFormatDeclaration<
@@ -22,11 +22,11 @@ export class Kit {
     }
 
     public bytes: Uint8Array;
-    private _moduleReprs: MapByFormatDeclaration;
+    private _formatCache: MapByFormatDeclaration;
     
     private constructor(bytes: Uint8Array) {
         this.bytes = new Uint8Array(bytes);
-        this._moduleReprs = new Map();
+        this._formatCache = new Map();
     }
 
     public as<
@@ -35,8 +35,8 @@ export class Kit {
     >(fmtDeclare: T, options?: any): F {
         const Format = fmtDeclare.Format;
 
-        if (this._moduleReprs.has(fmtDeclare)) {
-            return this._moduleReprs.get(fmtDeclare);
+        if (this._formatCache.has(fmtDeclare)) {
+            return this._formatCache.get(fmtDeclare);
         }
 
         const mod = new Format(this, options);
@@ -44,7 +44,7 @@ export class Kit {
         // TODO: Assert it supports extraction
         fmtDeclare.extract!(mod);
 
-        this._moduleReprs.set(fmtDeclare, mod);
+        this._formatCache.set(fmtDeclare, mod);
 
         return mod;
     }

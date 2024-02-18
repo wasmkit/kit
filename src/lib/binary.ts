@@ -27,7 +27,7 @@ export class BytesView {
     public bytes: Uint8Array;
     public at: number;
 
-    public constructor(bytes: Uint8Array, at: number = 0) {
+    public constructor(bytes: Uint8Array = new Uint8Array(65536), at: number = 0) {
         this.bytes = bytes;
         this.at = at;
     }

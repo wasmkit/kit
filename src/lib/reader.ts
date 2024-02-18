@@ -8,8 +8,6 @@ const c_u32 = new Uint32Array(convo);
 const c_f32 = new Float32Array(convo);
 const c_f64 = new Float64Array(convo);
 
-export namespace read {
-
 export const u8 = (view: BytesView): number => view.bytes[view.at++];
 
 export const i8 = (view: BytesView): number => {
@@ -95,6 +93,4 @@ export const string = (view: BytesView): string => {
 
 export const isEOF = (view: BytesView): boolean => {
     return view.at >= view.bytes.byteLength;
-}
-
 }

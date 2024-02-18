@@ -1,8 +1,10 @@
-import { Kit } from "../../kit";
-import { BytesView } from "../../lib/binary";
-import { read } from "../../lib/reader";
 import { AbstractFormat } from "../abstract";
+import { BytesView } from "../../lib/binary";
+import * as read  from "../../lib/reader";
 
+
+const FILE_MAGIC = 0x6D736100;
+const FILE_VERSION = 0x1;
 
 enum SectionId {
     Custom =        0,
@@ -26,18 +28,10 @@ type SectionName = Uncapitalize<Exclude<keyof typeof SectionId, "kMax">>;
 type KnownSectionName = Exclude<SectionName, "custom">;
 type SectionRecords = Record<KnownSectionName, Uint8Array | null> & { custom: Map<string, Uint8Array> };
 
-
-
-const FILE_MAGIC = 0x6D736100;
-const FILE_VERSION = 0x1;
 interface Metadata {
     magic: typeof FILE_MAGIC;
     version: typeof FILE_VERSION;
 }
-
-
-
-export namespace raw {
 
 export class Format extends AbstractFormat implements SectionRecords {
     public readonly metadata: Metadata =  {
@@ -94,6 +88,4 @@ export const extract = (fmt: Format): void => {
 
         fmt.custom.set(name, read.bytes(v, end - v.at));
     }
-}
-
 }
