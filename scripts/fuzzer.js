@@ -6,8 +6,6 @@ execSync("npm run build");
 
 const { fmt, wasmkit } = require(join(__dirname, "..", "dist/cjs/bundle.js"));
 
-main();
-
 async function main() {
     const FEED = 5000;
     await doExtract({
@@ -72,3 +70,5 @@ async function doExtract({ bytes, format, doCompile }) {
         throw err;
     }
 }
+
+main();
