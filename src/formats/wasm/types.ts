@@ -50,6 +50,11 @@ export type GlobalType = {
     valueType: ValueType;
 }
 
+export type Global = {
+    type: GlobalType;
+    initialization: InstructionExpression;
+}
+
 export const enum ExternalType {
     Function = 0,
     Table = 1,
@@ -106,10 +111,7 @@ export type DataSegment = { mode: DataSegmentMode, initialization: Uint8Array } 
   | { mode: DataSegmentMode.Active, memoryIndex: number, offset: InstructionExpression }
 )
 
-export type InstructionExpression = [...Instruction[], {
-    opcode: Opcode.End,
-    immediates: {}
-}];
+export type InstructionExpression = [...Instruction[], TerminatingEndInstruction];
 
 // TODO: Maybe make this type-smart with an Opcode->Immediate mapping
 export type Instruction = {
@@ -603,3 +605,13 @@ export enum Opcode {
 }
 
 export const OpcodePrefixes = [0xFC, 0xFD];
+
+export type TerminatingEndInstruction = {
+    opcode: Opcode.End;
+    immediates: {};
+}
+
+export const TerminatingEndInstruction = {
+    opcode: Opcode.End,
+    immediates: {}
+} as TerminatingEndInstruction;

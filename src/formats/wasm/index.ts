@@ -3,12 +3,13 @@ import * as wasm from "./types";
 
 import { BytesView } from "../../lib/binary";
 import * as read from "../../lib/reader";
+import { readInstructionExpression } from "./instruction";
 
 export class Format extends AbstractFormat {
     public signatures: wasm.FuncSignature[] = [];
     public tables: wasm.TableType[] = [];
     public memories: wasm.MemoryType[] = [];
-    public globals: wasm.GlobalType[] = [];
+    public globals: wasm.Global[] = [];
     public elements: wasm.ElementSegment[] = [];
     public datas: wasm.DataSegment[] = [];
     public start?: number;
@@ -47,7 +48,7 @@ const readMemory = (v: BytesView): wasm.MemoryType => {
     }
 }
 
-const readGlobal = (v: BytesView): wasm.GlobalType => {
+const readGlobalType = (v: BytesView): wasm.GlobalType => {
     const valueType = read.i8(v);
     const flags = read.vu32(v);
 
@@ -56,6 +57,14 @@ const readGlobal = (v: BytesView): wasm.GlobalType => {
         mutable: (flags & 1) === 1
     }
 }
+
+const readGlobal = (v: BytesView): wasm.Global => {
+    return {
+        type: readGlobalType(v),
+        initialization: readInstructionExpression(v)
+    }
+}
+
 
 const readElementSegment = (v: BytesView): wasm.ElementSegment => {
     const modeFlags = read.u8(v) & 0b111;
@@ -168,16 +177,12 @@ const readImport = (v: BytesView): wasm.Import => {
             entry.description.memoryType = readMemory(v);
         } break;
         case wasm.ExternalType.Global: {
-            entry.description.globalType = readGlobal(v);
+            entry.description.globalType = readGlobalType(v);
         } break;
         default: console.assert(false, "Unexpected export entry type (" + (entry["type"] ) + ")");
     }
 
     return entry;
-}
-
-const readInstructionExpression = (v: BytesView): wasm.InstructionExpression => {
-    return [{opcode:wasm.Opcode.End,immediates:{}}];
 }
 
 export const extract = (fmt: Format): void => {

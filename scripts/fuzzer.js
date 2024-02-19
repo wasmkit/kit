@@ -1,4 +1,5 @@
 const { execSync, spawn } = require("child_process");
+const { writeFileSync, rmSync } = require("fs");
 const { join } = require("path");
 
 
@@ -23,6 +24,12 @@ async function main() {
             console.warn("    " + err.trim());
         }
     }
+
+    // await doExtract({
+    //     bytes: await makeFuzzWithSize({ feed: FEED }),
+    //     format: "wasm",
+    //     doWasm2watCheck: true
+    // });
 }
 
 async function makeFuzzWithSize({ feed }) {
@@ -52,11 +59,11 @@ async function makeFuzzWithSize({ feed }) {
     return bytes;
 }
 
-async function doExtract({ bytes, format, doCompile }) {
+async function doExtract({ bytes, format, doCompile, doWasm2watCheck }) {
     if (!doCompile) doCompile = false;
+    if (!doWasm2watCheck) doWasm2watCheck = false;
 
     try {
-
         const kit = await wasmkit(bytes);
 
         const mod = kit.as(fmt[format]);
@@ -65,10 +72,25 @@ async function doExtract({ bytes, format, doCompile }) {
             kit.compileFrom(fmt[format].compile, mod);
         }
 
+        if (doWasm2watCheck) {
+            logWasm2Wat(bytes);
+            console.dir(mod, { depth: 500 });
+        }
     } catch (err) {
         console.log(bytes);
         throw err;
     }
 }
+
+function logWasm2Wat(bytes) {
+    const file = join(__dirname, "wasmkit-fuzz.wasm");
+    const outfile = join(__dirname, "wasmkit-fuzz.wat");
+    writeFileSync(file, bytes);
+
+    execSync("wasm2wat " + JSON.stringify(file) + " -o " + JSON.stringify(outfile));
+
+    rmSync(file);
+}
+
 
 main();
