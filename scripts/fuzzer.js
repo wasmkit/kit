@@ -10,13 +10,13 @@ async function main() {
     const FEED = 5000;
     await doExtract({
         bytes: await makeFuzzWithSize({ feed: FEED }),
-        format: "raw"
+        format: "wasm"
     });
     for (let i = 0; i < 100; ++i) {
         try {
             await doExtract({
                 bytes: await makeFuzzWithSize({ feed: FEED }),
-                format: "raw"
+                format: "wasm"
             });
         } catch (err) {
             console.warn("Fuzzed file attempt failed (fuzzer error) (idx=" + i + "):");

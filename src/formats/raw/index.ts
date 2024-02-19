@@ -6,8 +6,9 @@ import * as read  from "../../lib/reader";
 const FILE_MAGIC = 0x6D736100;
 const FILE_VERSION = 0x1;
 
-enum SectionId {
+export enum SectionId {
     Custom =        0,
+    // alias for Type
     Signature =     1,
     Import =        2,
     Function =      3,
