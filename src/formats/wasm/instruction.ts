@@ -1,6 +1,7 @@
 import { BytesView } from "../../lib/binary";
 import { Immediates, Instruction, InstructionExpression, Opcode, OpcodePrefixes, TerminatingEndInstruction } from "./types";
 import * as read from "../../lib/reader";
+import * as logging from "../../lib/logging";
 
 const KNOWN_OPCODES = Object.values(Opcode).filter(e => typeof e === "number");
 
@@ -180,7 +181,7 @@ export const readInstruction = (v: BytesView): Instruction => {
             immediates.laneIndexs = Array.from(read.bytes(v, 16));
         } break;
         default: {
-            console.assert(KNOWN_OPCODES.includes(opcode), "Unknown opcode " + opcode);
+            logging.assert(KNOWN_OPCODES.includes(opcode), "Unknown opcode " + opcode);
         } break;
     }
 

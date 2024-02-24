@@ -1,7 +1,7 @@
 import { AbstractFormat } from "../abstract";
 import { BytesView } from "../../lib/binary";
 import * as read  from "../../lib/reader";
-
+import * as logging from "../../lib/logging";
 
 const FILE_MAGIC = 0x6D736100;
 const FILE_VERSION = 0x1;
@@ -59,19 +59,19 @@ export const extract = (fmt: Format): void => {
     const { kit } = fmt;
     const v = new BytesView(kit.bytes);
 
-    console.assert(read.u32(v) === FILE_MAGIC, "Invalid file magic");
-    console.assert(read.u32(v) === FILE_VERSION, "Invalid file version");
+    logging.assert(read.u32(v) === FILE_MAGIC, "Invalid file magic");
+    logging.assert(read.u32(v) === FILE_VERSION, "Invalid file version");
 
     while (read.isEOF(v) === false) {
         const id = read.u8(v);
 
         const size = read.vu32(v);
 
-        console.assert(id < SectionId.kMax, "Invalid section id", v.at, id);
+        logging.assert(id < SectionId.kMax, "Invalid section id");
 
         if (id !== 0) {
             const sectionName = SectionId[id].toLowerCase() as KnownSectionName;
-            console.assert(fmt[sectionName] === null, "Duplicate section id", v.at, id);
+            logging.assert(fmt[sectionName] === null, "Duplicate section id");
 
             fmt[sectionName] = read.bytes(v, size);
 

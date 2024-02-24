@@ -1,8 +1,9 @@
 import { AbstractFormat } from "../abstract";
 import * as wasm from "./types";
-
-import { BytesView } from "../../lib/binary";
 import * as read from "../../lib/reader";
+
+import * as logging from "../../lib/logging";
+import { BytesView } from "../../lib/binary";
 import { readInstructionExpression } from "./instruction";
 
 export class Format extends AbstractFormat {
@@ -27,7 +28,7 @@ const readLimits = (v: BytesView, flags: number = read.vu32(v)): wasm.Limits => 
 }
 
 const readSignature = (v: BytesView): wasm.FuncSignature => {
-    console.assert(read.u8(v) === 0x60, "Invalid function signature");
+    logging.assert(read.u8(v) === 0x60, "Invalid function signature");
 
     return {
         params: read.vector<wasm.ValueType>(v, read.i8),
@@ -85,7 +86,7 @@ const readElementSegment = (v: BytesView): wasm.ElementSegment => {
         if (isAnyRef) {
             segment.type = read.i8(v);
         } else {
-            console.assert(read.u8(v) === 0, "Expected element kind to be 0");
+            logging.assert(read.u8(v) === 0, "Expected element kind to be 0");
             segment.type = wasm.RefType.FuncRef;
         }
     } else if (segment.mode === wasm.ElementSegmentMode.Active) {
@@ -96,7 +97,7 @@ const readElementSegment = (v: BytesView): wasm.ElementSegment => {
             if (isAnyRef) {
                 segment.type = read.i8(v);
             } else {
-                console.assert(read.u8(v) === 0, "Expected element kind to be 0");
+                logging.assert(read.u8(v) === 0, "Expected element kind to be 0");
                 segment.type = wasm.RefType.FuncRef;
             }
         } else {
@@ -151,7 +152,7 @@ const readExport = (v: BytesView): wasm.Export => {
         case wasm.ExternalType.Global: {
             entry.description.globalIndex = read.vu32(v);
         } break;
-        default: console.assert(false, "Unexpected export entry type (" + (entry["type"] ) + ")");
+        default: logging.assert(false, "Unexpected export entry type (" + (entry["type"] ) + ")");
     }
 
     return entry;
@@ -179,7 +180,7 @@ const readImport = (v: BytesView): wasm.Import => {
         case wasm.ExternalType.Global: {
             entry.description.globalType = readGlobalType(v);
         } break;
-        default: console.assert(false, "Unexpected export entry type (" + (entry["type"] ) + ")");
+        default: logging.assert(false, "Unexpected export entry type (" + (entry["type"] ) + ")");
     }
 
     return entry;

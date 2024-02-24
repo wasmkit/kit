@@ -1,9 +1,10 @@
-import { BinaryLike, getBytesFromBinary } from "./lib/binary";
-
 import fmt, { FormatDeclaration } from "./formats/"
+import { AbstractFormat } from "./formats/abstract";
 import * as raw from "./formats/raw";
 import * as wasm from "./formats/wasm";
-import { AbstractFormat, FormatCtor } from "./formats/abstract";
+
+import { BinaryLike, getBytesFromBinary } from "./lib/binary";
+import * as logging from "./lib/logging";
 
 interface MapByFormatDeclaration<
     D = FormatDeclaration<AbstractFormat>
@@ -39,9 +40,10 @@ export class Kit {
             return this._formatCache.get(fmtDeclare);
         }
 
+        logging.assert(typeof fmtDeclare.extract === "function", "Provided format is missing `extract` implementation");
+
         const mod = new Format(this, options);
 
-        // TODO: Assert it supports extraction
         fmtDeclare.extract!(mod);
 
         this._formatCache.set(fmtDeclare, mod);
