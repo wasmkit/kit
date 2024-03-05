@@ -98,13 +98,13 @@ export const string = (view: BytesView): string => {
 
 export const vector = <T>(
     view: BytesView,
-    doRead: (view: BytesView) => T
+    doRead: (view: BytesView, i: number) => T
 ): T[] => {
     const length = vu32(view);
     const data: T[] = Array(length);
 
     for (let i = 0; i < length; ++i) {
-        data[i] = doRead(view);
+        data[i] = doRead(view, i);
     }
 
     return data;

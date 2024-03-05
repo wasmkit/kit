@@ -11,7 +11,8 @@ async function main() {
     const FEED = 5000;
     await doExtract({
         bytes: await makeFuzzWithSize({ feed: FEED }),
-        format: "wasm"
+        format: "wasm",
+        // doWasm2watCheck: true
     });
     for (let i = 0; i < 100; ++i) {
         try {

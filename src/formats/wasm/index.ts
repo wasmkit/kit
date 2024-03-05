@@ -16,6 +16,7 @@ export class Format extends AbstractFormat {
     public start?: number;
     public imports: wasm.Import[] = [];
     public exports: wasm.Export[] = [];
+    public functions: wasm.Function[] = [];
 }
 
 const readLimits = (v: BytesView, flags: number = read.vu32(v)): wasm.Limits => {
@@ -216,5 +217,20 @@ export const extract = (fmt: Format): void => {
     }
     if (sections.export) {
         fmt.exports = read.vector(new BytesView(sections.export), readExport);
+    }
+
+    if (sections.function && sections.code) {
+        const signatureIndices = read.vector(new BytesView(sections.function), read.vu32);
+        fmt.functions = read.vector<wasm.Function>(new BytesView(sections.code), (v, i) => {
+            const fv = new BytesView(read.bytes(v));
+
+            return {
+                signatureIndex: signatureIndices[i],
+                locals: read.vector<wasm.ValueType[]>(fv, () => {
+                    return Array<wasm.ValueType>(read.vu32(fv)).fill(read.i8(fv));
+                }).flat(),
+                body: readInstructionExpression(fv)
+            }
+        });
     }
 }

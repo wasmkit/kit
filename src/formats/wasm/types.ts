@@ -615,3 +615,9 @@ export const TerminatingEndInstruction = {
     opcode: Opcode.End,
     immediates: {}
 } as TerminatingEndInstruction;
+
+export type Function = {
+    signatureIndex: number;
+    locals: ValueType[];
+    body: InstructionExpression;
+}
