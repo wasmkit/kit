@@ -17,8 +17,9 @@ export const readInstruction = (v: BytesView): Instruction => {
         case Opcode.Loop:
         case Opcode.If: {
             const type = read.vi32(v);
+
             if (type & 0x8000_0000) immediates.valueType = type;
-            else immediates.typeIndex = type;
+            else immediates.signatureIndex = type;
         } break;
         case Opcode.Br:
         case Opcode.BrIf: {
@@ -33,7 +34,7 @@ export const readInstruction = (v: BytesView): Instruction => {
             immediates.functionIndex = read.vu32(v);
         } break;
         case Opcode.CallIndirect: {
-            immediates.typeIndex = read.vu32(v);
+            immediates.signatureIndex = read.vu32(v);
             immediates.tableIndex = read.vu32(v);
         } break;
         case Opcode.RefNull: {

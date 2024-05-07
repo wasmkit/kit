@@ -26,6 +26,9 @@ export enum ValueType {
     ExternRef = -0x11
 }
 
+export type VoidType = -0x40;
+export const VoidType: VoidType = -0x40;
+
 export type FuncSignature = {
     params: ValueType[];
     results: ValueType[];
@@ -120,14 +123,14 @@ export type Instruction = {
 }
 
 export type Immediates = {
-    valueType?: ValueType;
+    valueType?: ValueType | VoidType;
     refType?: RefType;
     valueTypes?: ValueType[];
     labelIndex?: number;
     labelIndexs?: number[];
     defaultLabelIndex?: number;
     functionIndex?: number;
-    typeIndex?: number;
+    signatureIndex?: number;
     tableIndex?: number;
     localIndex?: number;
     globalIndex?: number;
@@ -233,7 +236,7 @@ export enum Opcode {
 
     I64Eqz = 0x50,
     I64Eq = 0x51,
-    I64_ne = 0x52,
+    I64Ne = 0x52,
     I64Lt_S = 0x53,
     I64Lt_U = 0x54,
     I64Gt_S = 0x55,
