@@ -17,5 +17,9 @@ export const warn = (...args: any[]) => {
 export function assert(truth: boolean, msg: string = "Assertion failed"): asserts truth is true {
     if (truth) return;
 
-    throw new Error(msg);
+    throw fatal(msg);
+}
+
+export const fatal = (msg: string) => {
+    return new Error(msg);
 }
