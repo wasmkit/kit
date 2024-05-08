@@ -29,15 +29,15 @@ export class Kit {
         this.bytes = new Uint8Array(bytes);
         this._formatCache = new Map();
     }
-
+    
     public as<
         T extends FormatDeclaration<F>,
         F extends AbstractFormat
-    >(fmtDeclare: T, options?: any): F {
+    >(fmtDeclare: T, options?: any): InstanceType<T["Format"]> {
         const Format = fmtDeclare.Format;
 
         if (this._formatCache.has(fmtDeclare)) {
-            return this._formatCache.get(fmtDeclare);
+            return this._formatCache.get(fmtDeclare) as InstanceType<T["Format"]>;
         }
 
         logging.assert(typeof fmtDeclare.extract === "function", "Provided format is missing `extract` implementation");
@@ -48,7 +48,7 @@ export class Kit {
 
         this._formatCache.set(fmtDeclare, mod);
 
-        return mod;
+        return mod as InstanceType<T["Format"]>;
     }
 
     public raw(): raw.Format { return this.as(fmt.raw); }
