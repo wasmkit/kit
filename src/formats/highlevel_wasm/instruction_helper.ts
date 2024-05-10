@@ -11,9 +11,9 @@ export type Instr<
 > = T extends InstrType ? hl_wasm.InstructionOfType<T> : hl_wasm.Instruction;
 
 
-export type BlockSignature = Readonly<wasm.FuncSignature> | null;
 export const kInstrUnreachable: hl_wasm.Instruction = {
-    type: hl_wasm.InstructionType.Unreachable
+    type: hl_wasm.InstructionType.Unreachable,
+    signature: null
 };
 
 
@@ -73,16 +73,39 @@ export const popExpression = (
 export const popNonVoidExpression = (
     ctx: IntructionParsingContext,
 ): Instr => {
-    // Do the blockerizer
-    // TODO: Assert stack is not empty
+    // TODO: Assert stack is not empty)
+    let expr = ctx.valueStack.pop()!;
 
-    return ctx.valueStack.pop()!;
+    if (getExpressionResultCount(expr) === 1) return expr;
+    // If the top is a void, then we need to squash it
+    // with the previous instructions until we find a
+    // non-void statement. Effectively guaranteeing
+    // proper order of execution.
+    const block = {
+        type: InstrType.Block,
+        isLoop: false,
+        signature: { params: [], results: [] },
+        children: []
+    } as Instr<InstrType.Block>;
+    
+    do {
+        block.children.unshift(expr);
+
+        expr = ctx.valueStack.pop()!;
+    } while (getExpressionResultCount(expr) === 0);
+    
+    // Now the first thing in the block *actually* has a result
+    // (block.signature as wasm.FuncSignature).results = expr;
+
+    return expr;
 }
 
 export const pushExpression = (
     ctx: IntructionParsingContext,
     expr: Instr
 ) => {
+    // console.log('--push expr ' + expr.type + '--\n' + new Error().stack?.split('\n').slice(1,3).join('\n'))
+
     if (isMultiResultExpression(expr)) {
         pushMultiResultExpression(ctx, expr);
     } else {
@@ -94,17 +117,10 @@ export const pushExpression = (
 const isMultiResultExpression = (
     expr: Instr
 ): expr is MultiResultInstruction => {
-    switch (expr.type) {
-        case InstrType.Block:
-        case InstrType.If:
-        case InstrType.Call: break;
-
-        default: return false;
-    }
-
     const signature = expr.signature;
 
-    if (!signature) return false;
+    if (!signature) return  false;
+    if (hl_wasm.isValueType(signature)) return false;
 
     return signature.results.length > 1;
 }
@@ -133,39 +149,29 @@ const pushMultiResultExpression = (
     ctx.valueStack.push({
         type: hl_wasm.InstructionType.MultiSet,
         targets: locals,
-        value: expr
+        value: expr,
+        signature: null,
     });
 
     for (const local of locals) {
         ctx.valueStack.push({
             type: hl_wasm.InstructionType.Get,
-            target: local
+            target: local,
+            signature: local.valueType
         });
     }
 }
 
 
-
-const VALUE_TYPE_TO_FUNC_TYPE: Record<
-    wasm.ValueType, Readonly<wasm.FuncSignature>
-> = Object.values(wasm.ValueType).reduce((acc, type) => {
-    if (Number.isInteger(type) === false) return acc;
-    acc[type as wasm.ValueType] = {
-        params: [],
-        results: [type as wasm.ValueType]
-    };
-    return acc;
-}, {} as Record<wasm.ValueType, Readonly<wasm.FuncSignature>>);
-
 export const getBlockSignature = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
-): BlockSignature => {
+): hl_wasm.Signature => {
     if (instr.immediates.valueType === wasm.VoidType) return null;
 
     // It will never be 0
     if (instr.immediates.valueType) {
-        return VALUE_TYPE_TO_FUNC_TYPE[instr.immediates.valueType];
+        return instr.immediates.valueType;
     }
     
     return ctx.wasmFmt.signatures[instr.immediates.signatureIndex!];
@@ -181,35 +187,10 @@ export const getLabelByIndex = (
 export const getExpressionResultCount = (
     instr: Instr
 ): number => {
-    const type = instr.type;
+    const signature = instr.signature;
 
-    switch (type) {
-        case InstrType.If:
-        case InstrType.Call:
-        case InstrType.Block: {
-            return instr.signature ? instr.signature.results.length : 0;
-        } break;
-        case InstrType.Load:
-        case InstrType.Binary:
-        case InstrType.Const:
-        case InstrType.MemoryGrow:
-        case InstrType.MemorySize:
-        case InstrType.Select: // As of now, must be 1
-        case InstrType.Unary:
-        case InstrType.Get: {
-            return 1;
-        } break;
-        case InstrType.Br:
-        case InstrType.Switch:
-        case InstrType.MemoryGrow:
-        case InstrType.Nop:
-        case InstrType.Drop:
-        case InstrType.Return:
-        case InstrType.Unreachable:
-        case InstrType.Set:
-        case InstrType.MultiSet:
-        case InstrType.Store: {
-            return 0;
-        } break;
-    }
+    if (!signature) return 0;
+    if (hl_wasm.isValueType(signature)) return 1;
+
+    return signature.results.length;
 }

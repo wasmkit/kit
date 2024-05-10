@@ -64,27 +64,27 @@ export type DataSegment = Indexable & { mode: wasm.DataSegmentMode, initializati
 export type ActiveDataSegment = DataSegment & { mode: wasm.DataSegmentMode.Active };
 
 export enum InstructionType {
-    Nop,
-    Unreachable,
-    Drop,
-    Block,
-    If,
-    Br,
-    Switch,
-    Call,
-    Get,
-    Set,
-    Load,
-    Store,
-    Const,
-    Unary,
-    Binary,
-    Select,
-    Return,
-    MemorySize,
-    MemoryGrow,
+    Nop = "Nop",
+    Unreachable = "Unreachable",
+    Drop = "Drop",
+    Block = "Block",
+    If = "If",
+    Br = "Br",
+    Switch = "Switch",
+    Call = "Call",
+    Get = "Get",
+    Set = "Set",
+    Load = "Load",
+    Store = "Store",
+    Const = "Const",
+    Unary = "Unary",
+    Binary = "Binary",
+    Select = "Select",
+    Return = "Return",
+    MemorySize = "MemorySize",
+    MemoryGrow = "MemoryGrow",
 
-    MultiSet
+    MultiSet = "MultiSet"
 }
 
 type DeclInstrType<
@@ -102,8 +102,18 @@ export enum MemoryType {
     Float
 }
 
+export type Signature = Readonly<wasm.FuncSignature> | wasm.ValueType | null;
+
+export const isValueType = (
+    signature: Signature
+): signature is wasm.ValueType => {
+    /** @ts-ignore */
+    return signature < 0;
+}
+
 export type Instruction = {
     type: InstructionType;
+    signature: Signature;
 } & (
     DeclInstrType<InstructionType.Unreachable, {}>
   | DeclInstrType<InstructionType.Drop, {
@@ -113,12 +123,10 @@ export type Instruction = {
         count: number;
     }>
   | DeclInstrType<InstructionType.Block, {
-        signature: Readonly<wasm.FuncSignature> | null;
         children: Instruction[];
         isLoop: boolean;
     }>
   | DeclInstrType<InstructionType.If, {
-        signature: Readonly<wasm.FuncSignature> | null;
         condition: Instruction;
         ifTrue: BlockInstruction;
         ifFalse: BlockInstruction | null;
@@ -139,7 +147,6 @@ export type Instruction = {
         // immediate.
         target: Function | Instruction;
         arguments: Instruction[];
-        signature: Readonly<wasm.FuncSignature>;
     }>
   | DeclInstrType<InstructionType.Get, {
         target: Variable;
@@ -155,7 +162,7 @@ export type Instruction = {
         align: number;
         offset: number;
         address: Instruction;
-        valueType: wasm.ValueType;
+        signature: wasm.ValueType;
     }>
   | DeclInstrType<InstructionType.Store, {
         memoryType: MemoryType;
@@ -164,34 +171,34 @@ export type Instruction = {
         offset: number;
         address: Instruction;
         value: Instruction;
-        valueType: wasm.ValueType;
+        signature: wasm.ValueType;
     }>
   | DeclInstrType<InstructionType.Const, {
-        valueType: Omit<wasm.ValueType, wasm.ValueType.ExternRef>;
+        signature: Omit<wasm.ValueType, wasm.ValueType.ExternRef>;
     } & ({
-            valueType: wasm.ValueType.I32 | wasm.ValueType.F32 | wasm.ValueType.F64;
+            signature: wasm.ValueType.I32 | wasm.ValueType.F32 | wasm.ValueType.F64;
             value: number;
         } | {
-            valueType: wasm.ValueType.I64;
+            signature: wasm.ValueType.I64;
             value: bigint;
         } | {
-            valueType: wasm.ValueType.V128;
+            signature: wasm.ValueType.V128;
             value: Uint8Array;
         } | {
-            valueType: wasm.ValueType.FuncRef; // | wasm.ValueType.ExternRef
+            signature: wasm.ValueType.FuncRef; // | wasm.ValueType.ExternRef
             value: Function | null;
         }
     )>
   | DeclInstrType<InstructionType.Unary, {
         opcode: wasm.Opcode;
         value: Instruction;
-        valueType: wasm.ValueType;
+        signature: wasm.ValueType;
     }>
   | DeclInstrType<InstructionType.Binary, {
         opcode: wasm.Opcode;
         left: Instruction;
         right: Instruction;
-        valueType: wasm.ValueType;
+        signature: wasm.ValueType;
     }>
   | DeclInstrType<InstructionType.Select, {
         condition: Instruction;

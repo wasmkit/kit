@@ -4,8 +4,7 @@ import { Format as WasmFormat } from "../wasm/";
 
 import * as hl_wasm from "./types";
 import * as logging from "../../lib/logging";
-import { 
-    BlockSignature,
+import {
     Instr,
     InstrType,
     IntructionParsingContext,
@@ -33,6 +32,7 @@ const consumeNop = (
     } else {
         pushExpression(ctx, {
             type: hl_wasm.InstructionType.Nop,
+            signature: null,
             count: 1
         });
     }
@@ -44,7 +44,7 @@ const dropBlockLeftOvers = (
     start: number
 ) => {
     const signature = block.signature;
-    const resultLength = signature ? signature.results.length : 0;
+    const resultCount = getExpressionResultCount(block);
 
     // There's a chance a block can have more instructions
     // in its stack than its signature actually allows for
@@ -57,21 +57,27 @@ const dropBlockLeftOvers = (
     // end
     // 
     // So we must drop the extra values
-    const pointOfReturn = ctx.valueStack.length - resultLength;
-    for (let i = start; i < ctx.valueStack.length; i++) {
+    let seenResultsCount = 0;
+    for (let i = ctx.valueStack.length - 1; i >= start; i--) {
         let expr = ctx.valueStack[i];
 
         // TODO: Assert this should never be more than 1 (0, 1)
-        // If i >= pointOfReturn, then the following expression
-        // is a returned value (and therefore must be kept)
-        if (i < pointOfReturn && getExpressionResultCount(expr) === 1) {
-            expr = {
-                type: hl_wasm.InstructionType.Drop,
-                value: expr
-            };
+        // If seenResultsCount < resultLength, then the following
+        // expression is a returned value (and therefore must be kept)
+        if (getExpressionResultCount(expr) === 1) {
+            if (seenResultsCount < resultCount) {
+                seenResultsCount++;
+            } else {
+                expr = {
+                    type: hl_wasm.InstructionType.Drop,
+                    signature: null,
+                    value: expr
+                };
+            }
         }
 
-        block.children.push(expr);
+        // TODO: Speed up
+        block.children.splice(start, 0, expr);
     }
 }
 
@@ -168,6 +174,7 @@ const consumeBranch = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Br,
+        signature: null,
         label,
         value: values,
         condition
@@ -194,6 +201,7 @@ const consumeSwitch = (
     
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Switch,
+        signature: null,
         labels,
         defaultLabel,
         value: values,
@@ -218,6 +226,7 @@ export const consumeReturn = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Return,
+        signature: null,
         value: values
     });
 }
@@ -230,8 +239,10 @@ export const consumeIndirectCall = (
     const signature = getBlockSignature(ctx, instr)!;
 
     const args: Instr[] = [];
-    for (let i = 0; signature && i < signature.params.length; ++i) {
-        args.push(popNonVoidExpression(ctx));
+    if (signature && !hl_wasm.isValueType(signature)) {
+        for (let i = 0; signature && i < signature.params.length; ++i) {
+            args.push(popNonVoidExpression(ctx));
+        }
     }
 
     pushExpression(ctx, {
@@ -270,6 +281,7 @@ export const consumeDrop = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Drop,
+        signature: null,
         value: exprToDrop
     });
 }
@@ -283,6 +295,7 @@ export const consumeSelect = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Select,
+        signature: ifTrue.signature,
         condition,
         ifTrue,
         ifFalse
@@ -301,6 +314,7 @@ export const consumeGet = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Get,
+        signature: target.valueType,
         target
     });
 }
@@ -320,6 +334,7 @@ export const consumeSet = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Set,
+        signature: isTee ? target.valueType : null,
         target,
         value,
         isTee
@@ -413,9 +428,9 @@ export const tryConsumeLoad = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Load,
+        signature: valueType,
         address,
         memoryType,
-        valueType,
         byteSize,
         offset,
         align
@@ -424,11 +439,57 @@ export const tryConsumeLoad = (
     return true;
 }
 
+export const tryConsumeConst = (
+    ctx: IntructionParsingContext,
+    instr: wasm.Instruction
+): boolean => {
+    let valueType: wasm.ValueType;
+    let value: number | bigint | Uint8Array | hl_wasm.Function | null;
+    switch (instr.opcode) {
+        case wasm.Opcode.I32Const: {
+            valueType = wasm.ValueType.I32;
+            value = instr.immediates.value!;
+        } break;
+        case wasm.Opcode.I64Const: {
+            valueType = wasm.ValueType.I64;
+            value = instr.immediates.value!;
+        } break;
+        case wasm.Opcode.F32Const: {
+            valueType = wasm.ValueType.F32;
+            value = instr.immediates.value!;
+        } break;
+        case wasm.Opcode.F64Const: {
+            valueType = wasm.ValueType.F64;
+            value = instr.immediates.value!;
+        } break;
+        case wasm.Opcode.V128Const: {
+            valueType = wasm.ValueType.V128;
+            value = instr.immediates.value!;
+        } break;
+        case wasm.Opcode.RefNull: {
+            valueType = wasm.ValueType.FuncRef;
+            value = null;
+        } break;
+        case wasm.Opcode.RefFunc: {
+            valueType = wasm.ValueType.FuncRef;
+            value = ctx.fmt.functions[instr.immediates.functionIndex!];
+        } break;
+        default: { return false; }
+    }
+
+    pushExpression(ctx, {
+        type: hl_wasm.InstructionType.Const,
+        signature: valueType,
+        value
+    } as Instr<InstrType.Const>);
+
+    return true;
+}
 
 
 const getBlock = (
     ctx: IntructionParsingContext,
-    signature: BlockSignature | null
+    signature: hl_wasm.Signature | null
 ) => {
     ctx.breakStack.push({
         type: hl_wasm.InstructionType.Block,
@@ -520,18 +581,6 @@ const consumeExpressions = (
             // case wasm.Opcode.TableGrow: { } break;
             // case wasm.Opcode.TableSize: { } break;
             // case wasm.Opcode.TableFill: { } break;
-
-            default: {
-                if (tryConsumeLoad(ctx, instr)) break;
-                // if (tryConsumeConst(ctx, instr)) break;
-                // if (tryConsumeTable(ctx, instr)) break;
-                // if (tryConsumeMemory(ctx, instr)) break;
-                // if (tryConsumeBinary(ctx, instr)) break;
-                // if (tryConsumeUnary(ctx, instr)) break;
-                // if (tryConsumeReinterp(ctx, instr)) break;
-                // if (tryConsumeConvert(ctx, instr)) break;
-            } break;
-
             // case wasm.Opcode.I32Load:
             // case wasm.Opcode.I64Load:
             // case wasm.Opcode.F32Load:
@@ -701,6 +750,18 @@ const consumeExpressions = (
             // case wasm.Opcode.I64TruncSatF32_U: 
             // case wasm.Opcode.I64TruncSatF64_S: 
             // case wasm.Opcode.I64TruncSatF64_U: 
+            default: {
+                if (tryConsumeLoad(ctx, instr)) break;
+                if (tryConsumeConst(ctx, instr)) break;
+                // if (tryConsumeTable(ctx, instr)) break;
+                // if (tryConsumeMemory(ctx, instr)) break;
+                // if (tryConsumeBinary(ctx, instr)) break;
+                // if (tryConsumeUnary(ctx, instr)) break;
+                // if (tryConsumeReinterp(ctx, instr)) break;
+                // if (tryConsumeConvert(ctx, instr)) break;
+
+                throw logging.fatal('Invalid opcode ' + instr.opcode);
+            } break;
         }
 
         if (
