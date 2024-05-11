@@ -351,8 +351,8 @@ export enum Opcode {
     F64PromoteF32 = 0xBB,
     I32ReinterpretF32 = 0xBC,
     I64ReinterpretF64 = 0xBD,
-    F32ReinterpretF32 = 0xBE,
-    F64ReinterpretF64 = 0xBF,
+    F32ReinterpretI32 = 0xBE, // TODO
+    F64ReinterpretI64 = 0xBF,
 
     I32Extend8_S = 0xC0,
     I32Extend16_S = 0xC1,

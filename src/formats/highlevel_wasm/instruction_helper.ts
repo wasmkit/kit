@@ -70,11 +70,10 @@ export const popExpression = (
     return ctx.valueStack.pop()!;
 }
 
-export const popNonVoidExpression = (
+export const  popNonVoidExpression = (
     ctx: IntructionParsingContext,
 ): Instr => {
-    // TODO: Assert stack is not empty)
-    let expr = ctx.valueStack.pop()!;
+    let expr = popExpression(ctx);
 
     if (getExpressionResultCount(expr) === 1) return expr;
     // If the top is a void, then we need to squash it
@@ -93,11 +92,19 @@ export const popNonVoidExpression = (
 
         expr = ctx.valueStack.pop()!;
     } while (getExpressionResultCount(expr) === 0);
-    
-    // Now the first thing in the block *actually* has a result
-    // (block.signature as wasm.FuncSignature).results = expr;
 
-    return expr;
+
+    // Now the first thing in the block *actually* has a result
+    block.children.unshift(expr);
+
+    if (hl_wasm.isValueType(expr.signature)) {
+        block.signature = expr.signature;
+    } else if (expr.signature) {
+        // Assert it has 1 result (it should only) 
+        block.signature = expr.signature.results[0];
+    }
+
+    return block;
 }
 
 export const pushExpression = (
@@ -177,11 +184,12 @@ export const getBlockSignature = (
     return ctx.wasmFmt.signatures[instr.immediates.signatureIndex!];
 }
 
-export const getLabelByIndex = (
+export const getLabelByDepth = (
     ctx: IntructionParsingContext,
-    index: number
+    depth: number
 ): Instr<InstrType.Block> => {
-    return ctx.breakStack[index];
+    // TODO: Assert
+    return ctx.breakStack.at(-depth - 1)!;
 }
 
 export const getExpressionResultCount = (

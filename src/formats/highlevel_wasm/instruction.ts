@@ -10,7 +10,7 @@ import {
     IntructionParsingContext,
     getBlockSignature,
     getExpressionResultCount,
-    getLabelByIndex,
+    getLabelByDepth,
     kInstrUnreachable,
     moreInput,
     peekExpression,
@@ -43,7 +43,6 @@ const dropBlockLeftOvers = (
     block: Instr<InstrType.Block>,
     start: number
 ) => {
-    const signature = block.signature;
     const resultCount = getExpressionResultCount(block);
 
     // There's a chance a block can have more instructions
@@ -78,7 +77,9 @@ const dropBlockLeftOvers = (
 
         // TODO: Speed up
         block.children.splice(start, 0, expr);
+        ctx.valueStack.splice(i, 1);
     }
+
 }
 
 const consumeBlock = (
@@ -104,6 +105,7 @@ const consumeBlock = (
         };
 
         ctx.breakStack.push(block);
+        blocks.push(block);
 
         if (!moreInput(ctx)) break;
         if (peekInput(ctx).opcode !== wasm.Opcode.Block) break;
@@ -115,7 +117,7 @@ const consumeBlock = (
     let last: Instr<InstrType.Block> | null = null;
     while (blocks.length > 0) {
         const block = blocks.pop()!;
-        
+
         const start = ctx.valueStack.length;
         if (last !== null) {
             pushExpression(ctx, last);
@@ -162,7 +164,7 @@ const consumeBranch = (
     instr: wasm.Instruction
 ) => {
     const isConditional = instr.opcode === wasm.Opcode.BrIf;
-    const label = getLabelByIndex(ctx, instr.immediates.labelIndex!);
+    const label = getLabelByDepth(ctx, instr.immediates.labelIndex!);
     const resultCount = getExpressionResultCount(label);
 
     const condition: Instr | null = isConditional ? popNonVoidExpression(ctx) : null;
@@ -186,12 +188,12 @@ const consumeSwitch = (
     instr: wasm.Instruction
 ) => {
     const condition = popNonVoidExpression(ctx);
-    const defaultLabel = getLabelByIndex(ctx, instr.immediates.defaultLabelIndex!);
+    const defaultLabel = getLabelByDepth(ctx, instr.immediates.defaultLabelIndex!);
     const resultCount = getExpressionResultCount(defaultLabel);
 
     const labels = [];
     for (const labelIdx of instr.immediates.labelIndexs!) {
-        labels.push(getLabelByIndex(ctx, labelIdx));
+        labels.push(getLabelByDepth(ctx, labelIdx));
     }
 
     const values: Instr[] = [];
@@ -345,81 +347,74 @@ export const tryConsumeLoad = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ): boolean => {
-    let memoryType: hl_wasm.MemoryType;
+    let signed: boolean = false;
     let valueType: wasm.ValueType;
-    let byteSize: number;
+    let byteCount: number;
     switch (instr.opcode) {
         case wasm.Opcode.I32Load: {
-            memoryType = hl_wasm.MemoryType.SignedInt;
+            signed = true;
             valueType = wasm.ValueType.I32;
-            byteSize = 4;
+            byteCount = 4;
         } break;
         case wasm.Opcode.I64Load: {
-            memoryType = hl_wasm.MemoryType.SignedInt;
+            signed = true;
             valueType = wasm.ValueType.I64;
-            byteSize = 8;
+            byteCount = 8;
         } break;
         case wasm.Opcode.F32Load: {
-            memoryType = hl_wasm.MemoryType.Float;
             valueType = wasm.ValueType.F32;
-            byteSize = 4;
+            byteCount = 4;
         } break;
         case wasm.Opcode.F64Load: {
-            memoryType = hl_wasm.MemoryType.Float;
             valueType = wasm.ValueType.F64;
-            byteSize = 8;
+            byteCount = 8;
         } break;
         case wasm.Opcode.I32Load8_S: {
-            memoryType = hl_wasm.MemoryType.SignedInt;
+            signed = true;
             valueType = wasm.ValueType.I32;
-            byteSize = 1;
+            byteCount = 1;
         } break;
         case wasm.Opcode.I32Load8_U: {
-            memoryType = hl_wasm.MemoryType.UnsignedInt;
             valueType = wasm.ValueType.I32;
-            byteSize = 1;
+            byteCount = 1;
         } break;
         case wasm.Opcode.I32Load16_S: {
-            memoryType = hl_wasm.MemoryType.SignedInt;
+            signed = true;
             valueType = wasm.ValueType.I32;
-            byteSize = 2;
+            byteCount = 2;
         } break;
         case wasm.Opcode.I32Load16_U: {
-            memoryType = hl_wasm.MemoryType.UnsignedInt;
             valueType = wasm.ValueType.I32;
-            byteSize = 2;
+            byteCount = 2;
         } break;
         case wasm.Opcode.I64Load8_S: {
-            memoryType = hl_wasm.MemoryType.SignedInt;
+            signed = true;
             valueType = wasm.ValueType.I64;
-            byteSize = 1;
+            byteCount = 1;
         } break;
         case wasm.Opcode.I64Load8_U: {
-            memoryType = hl_wasm.MemoryType.UnsignedInt;
             valueType = wasm.ValueType.I64;
-            byteSize = 1;
+            byteCount = 1;
         } break;
         case wasm.Opcode.I64Load16_S: {
-            memoryType = hl_wasm.MemoryType.SignedInt;
+            signed = true;
             valueType = wasm.ValueType.I64;
-            byteSize = 2;
+            byteCount = 2;
         } break;
         case wasm.Opcode.I64Load16_U: {
-            memoryType = hl_wasm.MemoryType.UnsignedInt;
             valueType = wasm.ValueType.I64;
-            byteSize = 2;
+            byteCount = 2;
         } break;
         case wasm.Opcode.I64Load32_S: {
-            memoryType = hl_wasm.MemoryType.SignedInt;
+            signed = true;
             valueType = wasm.ValueType.I64;
-            byteSize = 4;
+            byteCount = 4;
         } break;
         case wasm.Opcode.I64Load32_U: {
-            memoryType = hl_wasm.MemoryType.UnsignedInt;
             valueType = wasm.ValueType.I64;
-            byteSize = 4;
+            byteCount = 4;
         } break;
-        default: { return false; }
+        default: return false;
     }
 
     const { align, offset } = instr.immediates.memoryArgument!;
@@ -430,10 +425,59 @@ export const tryConsumeLoad = (
         type: hl_wasm.InstructionType.Load,
         signature: valueType,
         address,
-        memoryType,
-        byteSize,
+        signed,
+        byteCount,
         offset,
         align
+    });
+
+    return true;
+}
+
+export const tryConsumeStore = (
+    ctx: IntructionParsingContext,
+    instr: wasm.Instruction
+): boolean => {
+    let valueType: wasm.ValueType;
+    let byteCount: number;
+    switch (instr.opcode) {
+        case wasm.Opcode.I32Store: {
+            valueType = wasm.ValueType.I32;
+            byteCount = 4;
+        } break;
+        case wasm.Opcode.I32Store8: {
+            valueType = wasm.ValueType.I32;
+            byteCount = 1;
+        } break;
+        case wasm.Opcode.I64Store: {
+            valueType = wasm.ValueType.I64;
+            byteCount = 8;
+        } break;
+        case wasm.Opcode.F32Store: {
+            valueType = wasm.ValueType.F32;
+            byteCount = 4;
+        } break;
+        case wasm.Opcode.F64Store: {
+            valueType = wasm.ValueType.F64;
+            byteCount = 8;
+        } break;
+
+        default: return false;
+    }
+
+    const { align, offset } = instr.immediates.memoryArgument!;
+
+    const address = popNonVoidExpression(ctx);
+    const value = popNonVoidExpression(ctx);
+
+    pushExpression(ctx, {
+        type: hl_wasm.InstructionType.Store,
+        signature: valueType,
+        address,
+        byteCount,
+        offset,
+        align,
+        value
     });
 
     return true;
@@ -474,7 +518,7 @@ export const tryConsumeConst = (
             valueType = wasm.ValueType.FuncRef;
             value = ctx.fmt.functions[instr.immediates.functionIndex!];
         } break;
-        default: { return false; }
+        default: return false;
     }
 
     pushExpression(ctx, {
@@ -486,6 +530,238 @@ export const tryConsumeConst = (
     return true;
 }
 
+export const tryConsumeUnary = (
+    ctx: IntructionParsingContext,
+    instr: wasm.Instruction
+) => {
+    let valueType: wasm.ValueType;
+    switch (instr.opcode) {
+        case wasm.Opcode.F32Abs:
+        case wasm.Opcode.F32Ceil:
+        case wasm.Opcode.F32Copysign:
+        case wasm.Opcode.F32Floor:
+        case wasm.Opcode.F32Nearest:
+        case wasm.Opcode.F32Neg:
+        case wasm.Opcode.F32Sqrt:
+        case wasm.Opcode.F32Trunc: {
+            valueType = wasm.ValueType.F32;
+        } break;
+        case wasm.Opcode.F64Abs:
+        case wasm.Opcode.F64Ceil:
+        case wasm.Opcode.F64Copysign:
+        case wasm.Opcode.F64Floor:
+        case wasm.Opcode.F64Nearest:
+        case wasm.Opcode.F64Neg:
+        case wasm.Opcode.F64Sqrt:
+        case wasm.Opcode.F64Trunc: {
+            valueType = wasm.ValueType.F64;
+        } break;
+        case wasm.Opcode.I32Clz:
+        case wasm.Opcode.I32Ctz:
+        case wasm.Opcode.I32Eqz:
+        case wasm.Opcode.I32Popcnt: { 
+            valueType = wasm.ValueType.I32;
+        } break;
+        case wasm.Opcode.I64Clz:
+        case wasm.Opcode.I64Eqz:
+        case wasm.Opcode.I64Popcnt: {
+            valueType = wasm.ValueType.I64;
+        } break;
+        default: return false;
+    }
+
+    const value = popNonVoidExpression(ctx);
+
+    pushExpression(ctx, {
+        type: InstrType.Unary,
+        value,
+        signature: valueType,
+        opcode: instr.opcode
+    });
+
+    return true;
+}
+
+export const tryConsumeBinary = (
+    ctx: IntructionParsingContext,
+    instr: wasm.Instruction
+) => {
+    let valueType: wasm.ValueType;
+    switch (instr.opcode) {
+        case wasm.Opcode.F32Add:
+        case wasm.Opcode.F32Div:
+        case wasm.Opcode.F32Max:
+        case wasm.Opcode.F32Min:
+        case wasm.Opcode.F32Mul:
+        case wasm.Opcode.F32Sub: {
+            valueType = wasm.ValueType.F32;
+        } break;
+        case wasm.Opcode.F64Add:
+        case wasm.Opcode.F64Div:
+        case wasm.Opcode.F64Max:
+        case wasm.Opcode.F64Min:
+        case wasm.Opcode.F64Mul:
+        case wasm.Opcode.F64Sub: {
+            valueType = wasm.ValueType.F64;
+        } break;
+        case wasm.Opcode.F32Eq:
+        case wasm.Opcode.F32Ge:
+        case wasm.Opcode.F32Gt:
+        case wasm.Opcode.F32Le:
+        case wasm.Opcode.F32Lt:
+        case wasm.Opcode.F32Ne:
+
+        case wasm.Opcode.F64Eq:
+        case wasm.Opcode.F64Ge:
+        case wasm.Opcode.F64Gt:
+        case wasm.Opcode.F64Le:
+        case wasm.Opcode.F64Lt:
+        case wasm.Opcode.F64Ne:
+
+        case wasm.Opcode.I32Eq:
+        case wasm.Opcode.I32Ge_S:
+        case wasm.Opcode.I32Ge_U:
+        case wasm.Opcode.I32Gt_S:
+        case wasm.Opcode.I32Gt_U:
+        case wasm.Opcode.I32Le_S:
+        case wasm.Opcode.I32Le_U:
+        case wasm.Opcode.I32Lt_S:
+        case wasm.Opcode.I32Lt_U:
+        case wasm.Opcode.I32Ne:
+                
+        case wasm.Opcode.I64Eq:
+        case wasm.Opcode.I64Ge_S:
+        case wasm.Opcode.I64Ge_U:
+        case wasm.Opcode.I64Gt_S:
+        case wasm.Opcode.I64Gt_U:
+        case wasm.Opcode.I64Le_S:
+        case wasm.Opcode.I64Le_U:
+        case wasm.Opcode.I64Lt_S:
+        case wasm.Opcode.I64Lt_U:
+        case wasm.Opcode.I64Ne:
+
+        case wasm.Opcode.I32Add:
+        case wasm.Opcode.I32And:
+        case wasm.Opcode.I32Mul:
+        case wasm.Opcode.I32Or:
+        case wasm.Opcode.I32Shl:
+        case wasm.Opcode.I32Shr_S:
+        case wasm.Opcode.I32Shr_U:
+        case wasm.Opcode.I32Sub:
+        case wasm.Opcode.I32Rem_S:
+        case wasm.Opcode.I32Rem_U:
+        case wasm.Opcode.I32Div_S:
+        case wasm.Opcode.I32Div_U:
+        case wasm.Opcode.I32Rotl:
+        case wasm.Opcode.I32Rotr:
+        case wasm.Opcode.I32Xor: {
+            valueType = wasm.ValueType.I32;
+        } break;
+        case wasm.Opcode.I64Add:
+        case wasm.Opcode.I64And:
+        case wasm.Opcode.I64Mul:
+        case wasm.Opcode.I64Or:
+        case wasm.Opcode.I64Shl:
+        case wasm.Opcode.I64Shr_S:
+        case wasm.Opcode.I64Shr_U:
+        case wasm.Opcode.I64Sub:
+        case wasm.Opcode.I64Rem_S:
+        case wasm.Opcode.I64Rem_U:
+        case wasm.Opcode.I64Div_S:
+        case wasm.Opcode.I64Div_U:
+        case wasm.Opcode.I64Rotl:
+        case wasm.Opcode.I64Rotr:
+        case wasm.Opcode.I64Xor: {
+            valueType = wasm.ValueType.I64;
+        } break;
+
+        default: return false;
+    }
+
+    const left = popNonVoidExpression(ctx);
+    const right = popNonVoidExpression(ctx);
+
+    pushExpression(ctx, {
+        type: InstrType.Binary,
+        left,
+        right,
+        signature: valueType,
+        opcode: instr.opcode
+    });
+
+    return true;
+}
+
+export const tryConsumeConvert = (
+    ctx: IntructionParsingContext,
+    instr: wasm.Instruction
+) => {
+    let valueType: wasm.ValueType;
+
+    switch (instr.opcode) {
+        case wasm.Opcode.I32Extend8_S:
+        case wasm.Opcode.I32Extend16_S:
+        case wasm.Opcode.I32TruncSatF32_S:
+        case wasm.Opcode.I32TruncSatF32_U:
+        case wasm.Opcode.I32TruncSatF64_S:
+        case wasm.Opcode.I32TruncSatF64_U:
+        case wasm.Opcode.I32ReinterpretF32:
+        case wasm.Opcode.I32WrapI64:
+        case wasm.Opcode.I32TruncF32_S:
+        case wasm.Opcode.I32TruncF32_U:
+        case wasm.Opcode.I32TruncF64_S:
+        case wasm.Opcode.I32TruncF64_U: {
+            valueType = wasm.ValueType.I32;
+        } break;
+
+        case wasm.Opcode.I64ExtendI32_S:
+        case wasm.Opcode.I64ExtendI32_U:
+        case wasm.Opcode.I64TruncF32_S:
+        case wasm.Opcode.I64TruncF32_U:
+        case wasm.Opcode.I64TruncF64_S:
+        case wasm.Opcode.I64TruncF64_U:
+        case wasm.Opcode.I64ReinterpretF64:
+        case wasm.Opcode.I64Extend8_S:
+        case wasm.Opcode.I64Extend16_S:
+        case wasm.Opcode.I64Extend32_S:
+        case wasm.Opcode.I64TruncSatF32_S:
+        case wasm.Opcode.I64TruncSatF32_U:
+        case wasm.Opcode.I64TruncSatF64_S:
+        case wasm.Opcode.I64TruncSatF64_U: {
+            valueType = wasm.ValueType.I64;
+        } break;
+
+        case wasm.Opcode.F32ConvertI32_S:
+        case wasm.Opcode.F32ConvertI32_U:
+        case wasm.Opcode.F32ConvertI64_S:
+        case wasm.Opcode.F32ConvertI64_U:
+        case wasm.Opcode.F32DemoteF64:
+        case wasm.Opcode.F32ReinterpretI32: {
+            valueType = wasm.ValueType.F32;
+        } break;
+
+        case wasm.Opcode.F64ConvertI32_S:
+        case wasm.Opcode.F64ConvertI32_U:
+        case wasm.Opcode.F64ConvertI64_S:
+        case wasm.Opcode.F64ConvertI64_U:
+        case wasm.Opcode.F64PromoteF32:
+        case wasm.Opcode.F64ReinterpretI64: {
+            valueType = wasm.ValueType.F64;
+        } break;
+        default: return false;
+    }
+
+    const value = popNonVoidExpression(ctx);
+
+    pushExpression(ctx, {
+        type: hl_wasm.InstructionType.Convert,
+        signature: valueType,
+        opcode: instr.opcode,
+        value
+    });
+
+    return true;
+}
 
 const getBlock = (
     ctx: IntructionParsingContext,
@@ -517,8 +793,8 @@ const consumeExpressions = (
         const instr = readInput(ctx);
 
         switch (instr.opcode) {
-            case wasm.Opcode.Else: {} break;
-            case wasm.Opcode.End: {} break;
+            case wasm.Opcode.Else: break;
+            case wasm.Opcode.End: break;
 
 
             // The minute we see an unreachable,
@@ -581,184 +857,14 @@ const consumeExpressions = (
             // case wasm.Opcode.TableGrow: { } break;
             // case wasm.Opcode.TableSize: { } break;
             // case wasm.Opcode.TableFill: { } break;
-            // case wasm.Opcode.I32Load:
-            // case wasm.Opcode.I64Load:
-            // case wasm.Opcode.F32Load:
-            // case wasm.Opcode.F64Load:
-            // case wasm.Opcode.I32Load8_S:
-            // case wasm.Opcode.I32Load8_U:
-            // case wasm.Opcode.I32Load16_S:
-            // case wasm.Opcode.I32Load16_U:
-            // case wasm.Opcode.I64Load8_S:
-            // case wasm.Opcode.I64Load8_U:
-            // case wasm.Opcode.I64Load16_S:
-            // case wasm.Opcode.I64Load16_U:
-            // case wasm.Opcode.I64Load32_S:
-            // case wasm.Opcode.I64Load32_U:
-            // case wasm.Opcode.I32Store:
-            // case wasm.Opcode.I64Store:
-            // case wasm.Opcode.F32Store:
-            // case wasm.Opcode.F64Store:
-            // case wasm.Opcode.I32Store8:
-            // case wasm.Opcode.I32Store16:
-            // case wasm.Opcode.I64Store8:
-            // case wasm.Opcode.I64Store16:
-            // case wasm.Opcode.I64Store32:
-            // case wasm.Opcode.MemorySize:
-            // case wasm.Opcode.MemoryGrow:
-            // case wasm.Opcode.MemoryInit:
-            // case wasm.Opcode.DataDrop:
-            // case wasm.Opcode.MemoryCopy:
-            // case wasm.Opcode.MemoryFill:
-            // case wasm.Opcode.I32Const:
-            // case wasm.Opcode.I64Const:
-            // case wasm.Opcode.F32Const:
-            // case wasm.Opcode.F64Const:
-            // case wasm.Opcode.I32Eqz: 
-            // case wasm.Opcode.I32Eq: 
-            // case wasm.Opcode.I32Ne: 
-            // case wasm.Opcode.I32Lt_S: 
-            // case wasm.Opcode.I32Lt_U: 
-            // case wasm.Opcode.I32Gt_S: 
-            // case wasm.Opcode.I32Gt_U: 
-            // case wasm.Opcode.I32Le_S: 
-            // case wasm.Opcode.I32Le_U: 
-            // case wasm.Opcode.I32Ge_S: 
-            // case wasm.Opcode.I32Ge_U: 
-            // case wasm.Opcode.I64Eqz: 
-            // case wasm.Opcode.I64Eq: 
-            // case wasm.Opcode.I64Ne: 
-            // case wasm.Opcode.I64Lt_S: 
-            // case wasm.Opcode.I64Lt_U: 
-            // case wasm.Opcode.I64Gt_S: 
-            // case wasm.Opcode.I64Gt_U: 
-            // case wasm.Opcode.I64Le_S: 
-            // case wasm.Opcode.I64Le_U: 
-            // case wasm.Opcode.I64Ge_S: 
-            // case wasm.Opcode.I64Ge_U: 
-            // case wasm.Opcode.F32Eq: 
-            // case wasm.Opcode.F32Ne: 
-            // case wasm.Opcode.F32Lt: 
-            // case wasm.Opcode.F32Gt: 
-            // case wasm.Opcode.F32Le: 
-            // case wasm.Opcode.F32Ge: 
-            // case wasm.Opcode.F64Eq: 
-            // case wasm.Opcode.F64Ne: 
-            // case wasm.Opcode.F64Lt: 
-            // case wasm.Opcode.F64Gt: 
-            // case wasm.Opcode.F64Le: 
-            // case wasm.Opcode.F64Ge: 
-            // case wasm.Opcode.I32Clz: 
-            // case wasm.Opcode.I32Ctz: 
-            // case wasm.Opcode.I32Popcnt: 
-            // case wasm.Opcode.I32Add: 
-            // case wasm.Opcode.I32Sub: 
-            // case wasm.Opcode.I32Mul: 
-            // case wasm.Opcode.I32Div_S: 
-            // case wasm.Opcode.I32Div_U: 
-            // case wasm.Opcode.I32Rem_S: 
-            // case wasm.Opcode.I32Rem_U: 
-            // case wasm.Opcode.I32And: 
-            // case wasm.Opcode.I32Or: 
-            // case wasm.Opcode.I32Xor: 
-            // case wasm.Opcode.I32Shl: 
-            // case wasm.Opcode.I32Shr_S: 
-            // case wasm.Opcode.I32Shr_U: 
-            // case wasm.Opcode.I32Rotl: 
-            // case wasm.Opcode.I32Rotr: 
-            // case wasm.Opcode.I64Clz: 
-            // case wasm.Opcode.I64Ctz: 
-            // case wasm.Opcode.I64Popcnt: 
-            // case wasm.Opcode.I64Add: 
-            // case wasm.Opcode.I64Sub: 
-            // case wasm.Opcode.I64Mul: 
-            // case wasm.Opcode.I64Div_S: 
-            // case wasm.Opcode.I64Div_U: 
-            // case wasm.Opcode.I64Rem_S: 
-            // case wasm.Opcode.I64Rem_U: 
-            // case wasm.Opcode.I64And: 
-            // case wasm.Opcode.I64Or: 
-            // case wasm.Opcode.I64Xor: 
-            // case wasm.Opcode.I64Shl: 
-            // case wasm.Opcode.I64Shr_S: 
-            // case wasm.Opcode.I64Shr_U: 
-            // case wasm.Opcode.I64Rotl: 
-            // case wasm.Opcode.I64Rotr: 
-            // case wasm.Opcode.F32Abs: 
-            // case wasm.Opcode.F32Neg: 
-            // case wasm.Opcode.F32Ceil: 
-            // case wasm.Opcode.F32Floor: 
-            // case wasm.Opcode.F32Trunc: 
-            // case wasm.Opcode.F32Nearest: 
-            // case wasm.Opcode.F32Sqrt: 
-            // case wasm.Opcode.F32Add: 
-            // case wasm.Opcode.F32Sub: 
-            // case wasm.Opcode.F32Mul: 
-            // case wasm.Opcode.F32Div: 
-            // case wasm.Opcode.F32Min: 
-            // case wasm.Opcode.F32Max: 
-            // case wasm.Opcode.F32Copysign: 
-            // case wasm.Opcode.F64Abs: 
-            // case wasm.Opcode.F64Neg: 
-            // case wasm.Opcode.F64Ceil: 
-            // case wasm.Opcode.F64Floor: 
-            // case wasm.Opcode.F64Trunc: 
-            // case wasm.Opcode.F64Nearest: 
-            // case wasm.Opcode.F64Sqrt: 
-            // case wasm.Opcode.F64Add: 
-            // case wasm.Opcode.F64Sub: 
-            // case wasm.Opcode.F64Mul: 
-            // case wasm.Opcode.F64Div: 
-            // case wasm.Opcode.F64Min: 
-            // case wasm.Opcode.F64Max: 
-            // case wasm.Opcode.F64Copysign: 
-            // case wasm.Opcode.I32WrapI64: 
-            // case wasm.Opcode.I32TruncF32_S: 
-            // case wasm.Opcode.I32TruncF32_U: 
-            // case wasm.Opcode.I32TruncF64_S: 
-            // case wasm.Opcode.I32TruncF64_U: 
-            // case wasm.Opcode.I64ExtendI32_S: 
-            // case wasm.Opcode.I64ExtendI32_U: 
-            // case wasm.Opcode.I64TruncF32_S: 
-            // case wasm.Opcode.I64TruncF32_U: 
-            // case wasm.Opcode.I64TruncF64_S: 
-            // case wasm.Opcode.I64TruncF64_U: 
-            // case wasm.Opcode.F32ConvertI32_S: 
-            // case wasm.Opcode.F32ConvertI32_U: 
-            // case wasm.Opcode.F32ConvertI64_S: 
-            // case wasm.Opcode.F32ConvertI64_U: 
-            // case wasm.Opcode.F32DemoteF64: 
-            // case wasm.Opcode.F64ConvertI32_S: 
-            // case wasm.Opcode.F64ConvertI32_U: 
-            // case wasm.Opcode.F64ConvertI64_S: 
-            // case wasm.Opcode.F64ConvertI64_U: 
-            // case wasm.Opcode.F64PromoteF32: 
-            // case wasm.Opcode.I32ReinterpretF32: 
-            // case wasm.Opcode.I64ReinterpretF64: 
-            // case wasm.Opcode.F32ReinterpretF32: 
-            // case wasm.Opcode.F64ReinterpretF64: 
-            // case wasm.Opcode.I32Extend8_S: 
-            // case wasm.Opcode.I32Extend16_S: 
-            // case wasm.Opcode.I64Extend8_S: 
-            // case wasm.Opcode.I64Extend16_S: 
-            // case wasm.Opcode.I64Extend32_S: 
-            // case wasm.Opcode.I32TruncSatF32_S: 
-            // case wasm.Opcode.I32TruncSatF32_U: 
-            // case wasm.Opcode.I32TruncSatF64_S: 
-            // case wasm.Opcode.I32TruncSatF64_U: 
-            // case wasm.Opcode.I64TruncSatF32_S: 
-            // case wasm.Opcode.I64TruncSatF32_U: 
-            // case wasm.Opcode.I64TruncSatF64_S: 
-            // case wasm.Opcode.I64TruncSatF64_U: 
             default: {
                 if (tryConsumeLoad(ctx, instr)) break;
                 if (tryConsumeConst(ctx, instr)) break;
                 // if (tryConsumeTable(ctx, instr)) break;
                 // if (tryConsumeMemory(ctx, instr)) break;
-                // if (tryConsumeBinary(ctx, instr)) break;
-                // if (tryConsumeUnary(ctx, instr)) break;
-                // if (tryConsumeReinterp(ctx, instr)) break;
-                // if (tryConsumeConvert(ctx, instr)) break;
+                if (tryConsumeUnary(ctx, instr)) break;
+                if (tryConsumeBinary(ctx, instr)) break;
+                if (tryConsumeConvert(ctx, instr)) break;
 
                 throw logging.fatal('Invalid opcode ' + instr.opcode);
             } break;

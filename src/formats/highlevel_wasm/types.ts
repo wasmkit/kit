@@ -83,6 +83,7 @@ export enum InstructionType {
     Return = "Return",
     MemorySize = "MemorySize",
     MemoryGrow = "MemoryGrow",
+    Convert = "Convert",
 
     MultiSet = "MultiSet"
 }
@@ -157,15 +158,14 @@ export type Instruction = {
         value: Instruction;
     }>
   | DeclInstrType<InstructionType.Load, {
-        memoryType: MemoryType;
-        byteSize: number;
+        signed: boolean;
+        byteCount: number;
         align: number;
         offset: number;
         address: Instruction;
         signature: wasm.ValueType;
     }>
   | DeclInstrType<InstructionType.Store, {
-        memoryType: MemoryType;
         byteCount: number;
         align: number;
         offset: number;
@@ -174,16 +174,13 @@ export type Instruction = {
         signature: wasm.ValueType;
     }>
   | DeclInstrType<InstructionType.Const, {
-        signature: Omit<wasm.ValueType, wasm.ValueType.ExternRef>;
+        signature: Omit<wasm.ValueType, wasm.ValueType.ExternRef | wasm.ValueType.V128>;
     } & ({
             signature: wasm.ValueType.I32 | wasm.ValueType.F32 | wasm.ValueType.F64;
             value: number;
         } | {
             signature: wasm.ValueType.I64;
             value: bigint;
-        } | {
-            signature: wasm.ValueType.V128;
-            value: Uint8Array;
         } | {
             signature: wasm.ValueType.FuncRef; // | wasm.ValueType.ExternRef
             value: Function | null;
@@ -212,9 +209,39 @@ export type Instruction = {
   | DeclInstrType<InstructionType.MemoryGrow, {
         delta: Instruction;
     }>
+  | DeclInstrType<InstructionType.Convert, {
+        opcode: wasm.Opcode;
+        value: Instruction;
+        signature: wasm.ValueType;
+    }>
 
   | DeclInstrType<InstructionType.MultiSet, {
         targets: Variable[];
         value: Instruction;
     }>
+
+
+//   | DeclInstrType<InstructionType.V128Load, {
+//         byteCount: number;
+//         align: number;
+//         offset: number;
+//         address: Instruction;
+//         value: Instruction;
+//     }>
+//   | DeclInstrType<InstructionType.V128Store, {
+//         byteCount: number;
+//         align: number;
+//         offset: number;
+//         address: Instruction;
+//         value: Instruction;
+//     }>
+//   | DeclInstrType<InstructionType.V128Unary, {
+//         opcode: wasm.Opcode;
+//         value: Instruction;
+//     }>
+//   | DeclInstrType<InstructionType.V128Binary, {
+//         opcode: wasm.Opcode;
+//         left: Instruction;
+//         right: Instruction;
+//     }>
 );
