@@ -54,15 +54,15 @@ const getElementSegmentInitialization = (
     fmt: Format,
     wasmFmt: WasmFormat,
     wasmSeg: wasm.ElementSegment
-): number[] | hl_wasm.InstructionExpression[] => {
+): number[] | hl_wasm.Instruction[] => {
     if (!Array.isArray(wasmSeg.initialization[0])) {
         return wasmSeg.initialization as number[];
     }
 
-    const initialization = [] as hl_wasm.InstructionExpression[]
+    const initialization = [] as hl_wasm.Instruction[];
     for (const expr of wasmSeg.initialization) {
         initialization.push(
-            getInstructionExpression(fmt, wasmFmt, null, expr as wasm.InstructionExpression)
+            getInstructionExpression(fmt, wasmFmt, null, expr as wasm.Instruction[])
         );
     }
 
@@ -343,7 +343,7 @@ const digestInstructions = (
     fmt: Format,
     wasmFmt: WasmFormat,
     hlFunction: hl_wasm.Function,
-    wasmInstructions: wasm.InstructionExpression
+    wasmInstructions: wasm.Instruction[]
 ): void => {
     // 
     // After digestFunction is called on every wasmFmt

@@ -4,8 +4,6 @@ export type Importable<I = {}, NI = {}> = { imported: boolean } & ({ imported: t
 export type Exportable = { exported: true; exportName: string; } | { exported: false };
 export type Indexable = { index: number };
 
-export type InstructionExpression = Instruction;
-
 export type Table = Indexable & {
     size: wasm.Limits;
     refType: wasm.RefType;
@@ -35,13 +33,13 @@ export type GlobalVariable = Variable & {
 
 export type Global = Variable & {
     isGlobal: true;
-} & Importable<{}, { initialization: InstructionExpression }> & Exportable;
+} & Importable<{}, { initialization: Instruction }> & Exportable;
 
 export type Function = Indexable & {
     signature: Readonly<wasm.FuncSignature>;
 } & Importable<{}, {
     locals: LocalVariable[];
-    body: InstructionExpression;
+    body: Instruction;
 }> & Exportable;
 
 export type UnimportedFunction = Function & { imported: false };
@@ -49,9 +47,9 @@ export type UnimportedFunction = Function & { imported: false };
 export type ElementSegment = Indexable & {
     mode: wasm.ElementSegmentMode;
     type: wasm.RefType;
-    initialization: number[] | InstructionExpression[];
+    initialization: number[] | Instruction[];
 } & (
-    { mode: wasm.ElementSegmentMode.Active, table: Table, offset: InstructionExpression }
+    { mode: wasm.ElementSegmentMode.Active, table: Table, offset: Instruction }
   | { mode: wasm.ElementSegmentMode.Declarative | wasm.ElementSegmentMode.Passive }
 );
 
@@ -59,7 +57,7 @@ export type ActiveElementSegment = ElementSegment & { mode: wasm.ElementSegmentM
 
 export type DataSegment = Indexable & { mode: wasm.DataSegmentMode, initialization: Uint8Array } & (
     { mode: wasm.DataSegmentMode.Passive }
-  | { mode: wasm.DataSegmentMode.Active, memory: Memory, offset: InstructionExpression }
+  | { mode: wasm.DataSegmentMode.Active, memory: Memory, offset: Instruction }
 );
 
 export type ActiveDataSegment = DataSegment & { mode: wasm.DataSegmentMode.Active };

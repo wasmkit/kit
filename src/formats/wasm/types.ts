@@ -55,7 +55,7 @@ export type GlobalType = {
 
 export type Global = {
     type: GlobalType;
-    initialization: InstructionExpression;
+    initialization: Instruction[];
 }
 
 export const enum ExternalType {
@@ -96,9 +96,9 @@ export const enum ElementKind {
 export type ElementSegment = {
     mode: ElementSegmentMode,
     type: RefType,
-    initialization: number[] | InstructionExpression[];
+    initialization: number[] | Instruction[][];
 } & (
-    { mode: ElementSegmentMode.Active, tableIndex: number, offset: InstructionExpression }
+    { mode: ElementSegmentMode.Active, tableIndex: number, offset: Instruction[] }
   | { mode: ElementSegmentMode.Declarative | ElementSegmentMode.Passive }
 )
 
@@ -111,10 +111,8 @@ export const enum DataSegmentMode {
 
 export type DataSegment = { mode: DataSegmentMode, initialization: Uint8Array } & (
     { mode: DataSegmentMode.Passive }
-  | { mode: DataSegmentMode.Active, memoryIndex: number, offset: InstructionExpression }
+  | { mode: DataSegmentMode.Active, memoryIndex: number, offset: Instruction[] }
 )
-
-export type InstructionExpression = [...Instruction[], TerminatingEndInstruction];
 
 // TODO: Maybe make this type-smart with an Opcode->Immediate mapping
 export type Instruction = {
@@ -622,5 +620,5 @@ export const TerminatingEndInstruction = {
 export type Function = {
     signatureIndex: number;
     locals: ValueType[];
-    body: InstructionExpression;
+    body: Instruction[];
 }

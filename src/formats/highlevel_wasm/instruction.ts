@@ -1003,7 +1003,7 @@ export const getInstructionExpression = (
     fmt: Format,
     wasmFmt: WasmFormat,
     scope: hl_wasm.UnimportedFunction | null,
-    wasmExpr: wasm.InstructionExpression
+    wasmExpr: wasm.Instruction[]
 ): Instr => {
     const ctx = {
         branchStack: [],

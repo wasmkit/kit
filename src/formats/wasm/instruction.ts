@@ -1,7 +1,14 @@
-import { BytesView } from "../../lib/binary";
-import { Immediates, Instruction, InstructionExpression, Opcode, OpcodePrefixes, TerminatingEndInstruction } from "./types";
-import * as read from "../../lib/reader";
 import * as logging from "../../lib/logging";
+import * as read from "../../lib/reader";
+import { BytesView } from "../../lib/binary";
+
+import {
+    Immediates,
+    Instruction,
+    Opcode,
+    OpcodePrefixes,
+    TerminatingEndInstruction
+} from "./types";
 
 const KNOWN_OPCODES = Object.values(Opcode).filter(e => typeof e === "number");
 
@@ -192,7 +199,7 @@ export const readInstruction = (v: BytesView): Instruction => {
     }
 }
 
-export const readInstructionExpression = (v: BytesView): InstructionExpression => {
+export const readInstructionExpression = (v: BytesView): Instruction[] => {
     const instructions: Instruction[] = [];
     let depth = 0;
 
