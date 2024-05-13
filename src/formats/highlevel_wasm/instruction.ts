@@ -61,30 +61,50 @@ const dropBlockLeftOvers = (
     const resultCount = getExpressionResultCount(block);
 
     let seenResultsCount = 0;
-    for (let i = ctx.valueStack.length - 1; i >= start; i--) {
-        let expr = ctx.valueStack[i];
+    let end: number = ctx.valueStack.length;
+    if (resultCount !== 0) {
+        // 
+        // Get the index of the first value that is a result.
+        // To do this, we must go backwards.
+        // 
+        for (let i = ctx.valueStack.length - 1; i >= start; i--) {
+            const expr = ctx.valueStack[i];
 
-        // If seenResultsCount < resultLength, then the following
-        // expression is a returned value (and therefore must be kept)
+            // TODO: (0) Assert this should never be more than 1 (0, 1)
+            // -Might not be necessary as it nothing on valueStack
+            // is a multi result
+            if (getExpressionResultCount(expr) === 1) {
+                if (seenResultsCount < resultCount) {
+                    seenResultsCount++;
 
-        // TODO: Assert this should never be more than 1 (0, 1)
-        // -Might not be necessary as it nothing on valueStack
-        // is a multi result
-        if (getExpressionResultCount(expr) === 1) {
-            if (seenResultsCount < resultCount) {
-                seenResultsCount++;
-            } else {
-                expr = {
-                    type: hl_wasm.InstructionType.Drop,
-                    signature: null,
-                    value: expr
-                };
+                    if (seenResultsCount === resultCount) {
+                        end = i;
+                        break;
+                    }
+                }
             }
         }
 
-        // TODO: Speed up
-        block.children.splice(start, 0, expr);
-        ctx.valueStack.splice(i, 1);
+        // Now copy from start to end into children, dropping everything else
+        for (let i = start; i < end; i++) {
+            const expr = ctx.valueStack[i];
+
+            if (getExpressionResultCount(expr) === 1) {
+                block.children.push({
+                    type: hl_wasm.InstructionType.Drop,
+                    signature: null,
+                    value: expr
+                })
+            } else {
+                block.children.push(expr);
+            }
+        }
+
+        for (let i = end; i < ctx.valueStack.length; i++) {
+            block.children.push(ctx.valueStack[i]);
+        }
+
+        ctx.valueStack.length = start;
     }
 
 }
