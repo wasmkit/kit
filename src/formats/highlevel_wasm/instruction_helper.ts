@@ -1,50 +1,115 @@
-import * as wasm from "../wasm/types";
 import type { Format } from "./index";
 import { Format as WasmFormat } from "../wasm/";
 
+import * as wasm from "../wasm/types";
 import * as hl_wasm from "./types";
+import * as logging from "../../lib/logging";
+
 import { InstructionType as InstrType } from "./types";
-// Aliases
+
+/**
+ * Contains all information relevant / needed
+ * to process a given wasm instruction.
+ */
+export interface IntructionParsingContext {
+    /**
+     * Keeps track of blocks in the control flow
+     * that can be branched out of with br.
+     */
+    branchStack: Instr<InstrType.Block>[];
+
+    /**
+     * All values processed up to this point,
+     * this can include void values, as we
+     * keep them here for proper ordering.
+     */
+    valueStack: hl_wasm.Instruction[];
+
+    /**
+     * If the current block is unreachable,
+     * everything must get skipped, as
+     * following code might not be valid IR.
+     */
+    isUnreachable: boolean;
+    
+    /**
+     * The last delimiter that was processed,
+     * is used to know if If's are closed by
+     * End or by Else (marking whether continue
+     * processing the else block).
+     */
+    lastDelimiter: wasm.Opcode | null;
+
+    /**
+     * The current position in the input instruction
+     * stream.
+     */
+    inputPos: number;
+
+    /**
+     * The input instruction stream.
+     */
+    readonly input: wasm.Instruction[];
+
+    /**
+     * The current function scope, if any
+     * 
+     * (global $g (mut i32) (i32.const 4)) has no
+     * scope, as it's not in a function.
+     */
+    readonly scope: hl_wasm.UnimportedFunction | null;
+    
+    /**
+     * Cached wasm format data.
+     */
+    readonly wasmFmt: WasmFormat;
+
+    /**
+     * Cached hl_wasm format data.
+     */
+    readonly fmt: Format;
+}
+
+// TODO: FunctionInstructionParsingContext
+
+// Shorthand aliases of hl_wasm types
 export { InstrType };
 export type Instr<
     T extends InstrType | null = null
 > = T extends InstrType ? hl_wasm.InstructionOfType<T> : hl_wasm.Instruction;
 
-
+// 
+// Given the fact unreachables are common and are similar,
+// we just cache all of them into this constant.
+// 
 export const kInstrUnreachable: hl_wasm.Instruction = {
     type: hl_wasm.InstructionType.Unreachable,
     signature: null
 };
 
+// 
+// Only these types can have multiple results atm,
+// so we use this type simplicity.
+// 
+export type MultiResultInstruction = (
+    Instr<InstrType.Block> |
+    Instr<InstrType.If> |
+    Instr<InstrType.Call>
+) & { signature: Readonly<wasm.FuncSignature> };
 
-export type MultiResultInstruction = (Instr<InstrType.Block>
-    | Instr<InstrType.If>
-    | Instr<InstrType.Call>) & { signature: Readonly<wasm.FuncSignature> };
-
-
-export interface IntructionParsingContext {
-    breakStack: Instr<InstrType.Block>[];
-    valueStack: hl_wasm.Instruction[];
-    isUnreachable: boolean;
-    lastDelimiter: wasm.Opcode | null;
-
-    inputPos: number;
-    readonly input: wasm.InstructionExpression;
-    readonly scope: hl_wasm.UnimportedFunction | null;
-    readonly wasmFmt: WasmFormat;
-    readonly fmt: Format;
-}
 
 
 export const peekInput = (
     ctx: IntructionParsingContext
 ): wasm.Instruction => {
+    // TODO: Adjust return type
     return ctx.input[ctx.inputPos] ?? null;
 }
 
 export const readInput = (
     ctx: IntructionParsingContext
 ): wasm.Instruction => {
+    // TODO: Assert there is more input
     return ctx.input[ctx.inputPos++];
 }
 
@@ -59,6 +124,7 @@ export const moreInput = (
 export const peekExpression = (
     ctx: IntructionParsingContext
 ): Instr => {
+    // TODO: Adjust result type to contain null
     return ctx.valueStack.at(-1)!;
 }
 
@@ -70,12 +136,15 @@ export const popExpression = (
     return ctx.valueStack.pop()!;
 }
 
+
+
 export const  popNonVoidExpression = (
     ctx: IntructionParsingContext,
 ): Instr => {
     let expr = popExpression(ctx);
 
     if (getExpressionResultCount(expr) === 1) return expr;
+
     // If the top is a void, then we need to squash it
     // with the previous instructions until we find a
     // non-void statement. Effectively guaranteeing
@@ -111,14 +180,13 @@ export const pushExpression = (
     ctx: IntructionParsingContext,
     expr: Instr
 ) => {
-    // console.log('--push expr ' + expr.type + '--\n' + new Error().stack?.split('\n').slice(1,3).join('\n'))
-
     if (isMultiResultExpression(expr)) {
         pushMultiResultExpression(ctx, expr);
     } else {
         ctx.valueStack.push(expr);
     }
 }
+
 
 
 const isMultiResultExpression = (
@@ -171,7 +239,8 @@ const pushMultiResultExpression = (
 }
 
 
-export const getBlockSignature = (
+
+export const getWasmBlockSignature = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ): hl_wasm.Signature => {
@@ -185,12 +254,13 @@ export const getBlockSignature = (
     return ctx.wasmFmt.signatures[instr.immediates.signatureIndex!];
 }
 
-export const getLabelByDepth = (
+export const getBlockByDepth = (
     ctx: IntructionParsingContext,
     depth: number
 ): Instr<InstrType.Block> => {
     // TODO: Assert
-    return ctx.breakStack.at(-depth - 1)!;
+
+    return ctx.branchStack.at(-depth - 1)!;
 }
 
 export const getExpressionResultCount = (

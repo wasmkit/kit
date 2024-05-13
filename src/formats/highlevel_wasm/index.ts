@@ -1,19 +1,72 @@
 import { AbstractFormat } from "../abstract";
-import * as wasm from "../wasm/types";
 import { Format as WasmFormat } from "../wasm/";
+
+import * as wasm from "../wasm/types";
 import * as hl_wasm from "./types";
+
 import { getInstructionExpression } from "./instruction";
 
 export class Format extends AbstractFormat {
+    /**
+     * Contains all tables known to the module
+     * - This includes imported as well
+     */
     public tables: hl_wasm.Table[] = [];
+
+    /**
+     * Contains all memories known to the module
+     * - This includes imported as well
+     */
     public memories: hl_wasm.Memory[] = [];
+
+    /**
+     * Contains all globals known to the module
+     * - This includes imported as well
+     */
     public globals: hl_wasm.Global[] = [];
+
+    /**
+     * Contains all globals known to the module
+     * - Imported functions have their body set to null
+     */
     public functions: hl_wasm.Function[] = [];
 
+    /**
+     * Contains all elements segments known to the module
+     * - Active segments are listed here as well as their table
+     */
     public elements: hl_wasm.ElementSegment[] = [];
+
+    /**
+     * Contains all data segments known to the module
+     * - Active segments are listed here as well as their memory
+     */
     public datas: hl_wasm.DataSegment[] = [];
 
+    /**
+     * Contains the start function index, if existant
+     */
     public start?: number;
+}
+
+
+const getElementSegmentInitialization = (
+    fmt: Format,
+    wasmFmt: WasmFormat,
+    wasmSeg: wasm.ElementSegment
+): number[] | hl_wasm.InstructionExpression[] => {
+    if (!Array.isArray(wasmSeg.initialization[0])) {
+        return wasmSeg.initialization as number[];
+    }
+
+    const initialization = [] as hl_wasm.InstructionExpression[]
+    for (const expr of wasmSeg.initialization) {
+        initialization.push(
+            getInstructionExpression(fmt, wasmFmt, null, expr as wasm.InstructionExpression)
+        );
+    }
+
+    return initialization;
 }
 
 const digestElementSegment = (
@@ -21,42 +74,42 @@ const digestElementSegment = (
     wasmFmt: WasmFormat,
     wasmSeg: wasm.ElementSegment
 ): void => {
-    let initialization: number[] | hl_wasm.InstructionExpression[]
-    if (Array.isArray(wasmSeg.initialization[0])) {
-        initialization = [] as hl_wasm.InstructionExpression[];
-        for (const expr of wasmSeg.initialization) {
-            initialization.push(
-                getInstructionExpression(fmt, wasmFmt, null, expr as wasm.InstructionExpression)
-            );
-        }
-    } else {
-        initialization = wasmSeg.initialization as number[];
-    }
+    // 
+    // Only possible variation in Element Segments is
+    // whether they're active or not. Active segments
+    // refer to a table and are applied on-startup of
+    // the wasm.
+    // 
 
-    let seg: hl_wasm.ElementSegment;
+    const initialization = getElementSegmentInitialization(
+        fmt,
+        wasmFmt,
+        wasmSeg
+    );
 
-    if (wasmSeg.mode === wasm.ElementSegmentMode.Active) {
-        const table = fmt.tables[wasmSeg.tableIndex];
-
-        seg = {
-            index: fmt.elements.length,
-            mode: wasm.ElementSegmentMode.Active,
-            type: wasmSeg.type,
-            table: table,
-            offset: getInstructionExpression(fmt, wasmFmt, null, wasmSeg.offset),
-            initialization
-        };
-
-        (table.activeSegments as hl_wasm.ElementSegment[]).push(seg);
-    } else {
-        seg = {
+    if (wasmSeg.mode !== wasm.ElementSegmentMode.Active) {
+        fmt.elements.push({
             index: fmt.elements.length,
             mode: wasmSeg.mode,
             type: wasmSeg.type,
             initialization
-        }
+        });
+
+        return;
     }
 
+    const table = fmt.tables[wasmSeg.tableIndex];
+
+    const seg = {
+        index: fmt.elements.length,
+        mode: wasm.ElementSegmentMode.Active,
+        type: wasmSeg.type,
+        table: table,
+        offset: getInstructionExpression(fmt, wasmFmt, null, wasmSeg.offset),
+        initialization
+    };
+
+    (table.activeSegments as hl_wasm.ElementSegment[]).push(seg);
     fmt.elements.push(seg);
 }
 
@@ -65,27 +118,33 @@ const digestDataSegment = (
     wasmFmt: WasmFormat,
     wasmSeg: wasm.DataSegment
 ): void => {
-    let seg: hl_wasm.DataSegment;
-    if (wasmSeg.mode === wasm.DataSegmentMode.Active) {
-        const memory = fmt.memories[wasmSeg.memoryIndex];
+    // 
+    // Same as Element Segments, a Data Segment's type
+    // only differs in whether they or active or not.
+    // 
 
-        seg = {
-            index: fmt.datas.length,
-            mode: wasm.DataSegmentMode.Active,
-            memory: memory,
-            offset: getInstructionExpression(fmt, wasmFmt, null, wasmSeg.offset),
-            initialization: wasmSeg.initialization
-        };
-        // To rid us of the readonly
-        (memory.activeSegments as typeof seg[]).push(seg);
-    } else {
-        seg = {
+    if (wasmSeg.mode !== wasm.DataSegmentMode.Active) {
+        fmt.datas.push({
             index: fmt.datas.length,
             mode: wasmSeg.mode,
             initialization: wasmSeg.initialization
-        }
-    }
+        });
 
+        return;
+    }
+    
+    const memory = fmt.memories[wasmSeg.memoryIndex];
+
+    const seg = {
+        index: fmt.datas.length,
+        mode: wasm.DataSegmentMode.Active,
+        memory: memory,
+        offset: getInstructionExpression(fmt, wasmFmt, null, wasmSeg.offset),
+        initialization: wasmSeg.initialization
+    };
+
+    // To rid us of the readonly
+    (memory.activeSegments as typeof seg[]).push(seg);
     fmt.datas.push(seg);
 }
 
@@ -139,12 +198,15 @@ const digestExport = (
     _wasmFmt: WasmFormat,
     wasmExport: wasm.Export
 ): void => {
+    // Apply exported = true to the corresponding
+    // function, global, table or memory.
     switch (wasmExport.type) {
         case wasm.ExternalType.Function: {
             const { functionIndex } = wasmExport.description;
 
             const func = fmt.functions[functionIndex];
 
+            // TypeScript
             if (func.exported = true) {
                 func.exportName = wasmExport.name;
             }
@@ -154,6 +216,7 @@ const digestExport = (
 
             const global = fmt.globals[globalIndex];
 
+            // TypeScript
             if (global.exported = true) {
                 global.exportName = wasmExport.name;
             }
@@ -163,6 +226,7 @@ const digestExport = (
 
             const table = fmt.tables[tableIndex];
 
+            // TypeScript
             if (table.exported = true) {
                 table.exportName = wasmExport.name;
             }
@@ -172,6 +236,7 @@ const digestExport = (
 
             const mem = fmt.memories[memoryIndex];
 
+            // TypeScript
             if (mem.exported = true) {
                 mem.exportName = wasmExport.name;
             }
@@ -184,6 +249,11 @@ const digestImport = (
     wasmFmt: WasmFormat,
     wasmImport: wasm.Import
 ): void => {
+    // 
+    // For imports we must create a new entry for
+    // each import, to add to the corresponding list
+    // of functions, globals, tables or memories.
+    // 
     const importData = {
         exported: false as false,
         imported: true as true,
@@ -233,10 +303,12 @@ const digestFunction = (
     wasmFmt: WasmFormat,
     wasmFunction: wasm.Function
 ) => {
-    // Construct the new function, but keep the body null
-    // we need to build the functions first before
-    // parsing the bodies, as the bodies can rely on previous
-    // function's data.
+    // 
+    // Construct the new function, but keep the body null.
+    // we need to build the functions first before parsing
+    // the bodies, as the bodies can reference other
+    // functions (in Calls for example)
+    // 
     const signature = wasmFmt.signatures[wasmFunction.signatureIndex];
 
     const paramLocals = signature.params.map<hl_wasm.LocalVariable>((valueType, index) => ({
@@ -273,6 +345,11 @@ const digestInstructions = (
     hlFunction: hl_wasm.Function,
     wasmInstructions: wasm.InstructionExpression
 ): void => {
+    // 
+    // After digestFunction is called on every wasmFmt
+    // function we can now parse the instructions.
+    // 
+
     if (hlFunction.imported) return;
 
     hlFunction.body = getInstructionExpression(

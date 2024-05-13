@@ -1,16 +1,18 @@
-import * as wasm from "../wasm/types";
+import * as logging from "../../lib/logging";
+
 import type { Format } from "./index";
 import { Format as WasmFormat } from "../wasm/";
 
+import * as wasm from "../wasm/types";
 import * as hl_wasm from "./types";
-import * as logging from "../../lib/logging";
+
 import {
     Instr,
     InstrType,
     IntructionParsingContext,
-    getBlockSignature,
+    getWasmBlockSignature,
     getExpressionResultCount,
-    getLabelByDepth,
+    getBlockByDepth,
     kInstrUnreachable,
     moreInput,
     peekExpression,
@@ -38,6 +40,19 @@ const consumeNop = (
     }
 }
 
+/**
+ * Drops any values left on the stack that are not
+ * apart of the block's signature.
+ * 
+ * For context, the following is valid wasm:
+ * block i32
+ *   i32.const 1
+ *   i32.const 2
+ *   i32.const 3
+ *   return
+ * end
+ * 
+ */
 const dropBlockLeftOvers = (
     ctx: IntructionParsingContext,
     block: Instr<InstrType.Block>,
@@ -45,24 +60,16 @@ const dropBlockLeftOvers = (
 ) => {
     const resultCount = getExpressionResultCount(block);
 
-    // There's a chance a block can have more instructions
-    // in its stack than its signature actually allows for
-    // 
-    // block i32
-    //   i32.const 1
-    //   i32.const 2
-    //   i32.const 3
-    //   return
-    // end
-    // 
-    // So we must drop the extra values
     let seenResultsCount = 0;
     for (let i = ctx.valueStack.length - 1; i >= start; i--) {
         let expr = ctx.valueStack[i];
 
-        // TODO: Assert this should never be more than 1 (0, 1)
         // If seenResultsCount < resultLength, then the following
         // expression is a returned value (and therefore must be kept)
+
+        // TODO: Assert this should never be more than 1 (0, 1)
+        // -Might not be necessary as it nothing on valueStack
+        // is a multi result
         if (getExpressionResultCount(expr) === 1) {
             if (seenResultsCount < resultCount) {
                 seenResultsCount++;
@@ -82,6 +89,8 @@ const dropBlockLeftOvers = (
 
 }
 
+
+
 const consumeBlock = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
@@ -96,7 +105,7 @@ const consumeBlock = (
     // First read the blocks
     while (true) {
         const isLoop = instr.opcode === wasm.Opcode.Loop;
-        const signature = getBlockSignature(ctx, instr);
+        const signature = getWasmBlockSignature(ctx, instr);
         const block: Instr<InstrType.Block> = {
             type: hl_wasm.InstructionType.Block,
             children: [],
@@ -104,7 +113,7 @@ const consumeBlock = (
             signature
         };
 
-        ctx.breakStack.push(block);
+        ctx.branchStack.push(block);
         blocks.push(block);
 
         if (!moreInput(ctx)) break;
@@ -127,7 +136,7 @@ const consumeBlock = (
         consumeExpressions(ctx);
 
         // TODO: Assert the valueStack is no smaller than it was before we started
-        ctx.breakStack.pop();
+        ctx.branchStack.pop();
 
         dropBlockLeftOvers(ctx, block, start);
     }
@@ -141,7 +150,7 @@ const consumeIf = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
-    const signature = getBlockSignature(ctx, instr);
+    const signature = getWasmBlockSignature(ctx, instr);
     const condition = popNonVoidExpression(ctx);
 
     const ifTrue = getBlock(ctx, signature);
@@ -163,19 +172,13 @@ const consumeBranch = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
-    const isConditional = instr.opcode === wasm.Opcode.BrIf;
-    const label = getLabelByDepth(ctx, instr.immediates.labelIndex!);
+    const label = getBlockByDepth(ctx, instr.immediates.labelIndex!);
+    
+     // If the label is a loop, then it has no results
+     const resultCount = label.isLoop ? 0 : getExpressionResultCount(label);
     const signature = label.signature
 
-    let resultCount = 0;
-    if (!label.isLoop) {
-        if (hl_wasm.isValueType(signature)) {
-            resultCount = 1;
-        } else if (signature) {
-            resultCount = signature.results.length;
-        }
-    }
-
+    const isConditional = instr.opcode === wasm.Opcode.BrIf;
     const condition: Instr | null = isConditional ? popNonVoidExpression(ctx) : null;
 
     const values: Instr[] = [];
@@ -197,12 +200,14 @@ const consumeSwitch = (
     instr: wasm.Instruction
 ) => {
     const condition = popNonVoidExpression(ctx);
-    const defaultLabel = getLabelByDepth(ctx, instr.immediates.defaultLabelIndex!);
+    const defaultLabel = getBlockByDepth(ctx, instr.immediates.defaultLabelIndex!);
     const resultCount = getExpressionResultCount(defaultLabel);
 
     const labels = [];
     for (const labelIdx of instr.immediates.labelIndexs!) {
-        labels.push(getLabelByDepth(ctx, labelIdx));
+        // TODO: Assert this block is the same signature
+        // as the default. (Might not be necessary assertion)
+        labels.push(getBlockByDepth(ctx, labelIdx));
     }
 
     const values: Instr[] = [];
@@ -220,16 +225,15 @@ const consumeSwitch = (
     });
 }
 
-export const consumeReturn = (
+const consumeReturn = (
     ctx: IntructionParsingContext
 ) => {
-    // Assert we are in a function
+    // TODO: Assert we are in a function
     const scope = ctx.scope!;
     const signature = scope.signature;
     if (!signature) return;
 
     const values: Instr[] = [];
-
 
     for (let i = 0; i < signature.results.length; ++i) {
         values.push(popNonVoidExpression(ctx));
@@ -242,12 +246,12 @@ export const consumeReturn = (
     });
 }
 
-export const consumeIndirectCall = (
+const consumeIndirectCall = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
     const target = popNonVoidExpression(ctx);
-    const signature = getBlockSignature(ctx, instr)!;
+    const signature = getWasmBlockSignature(ctx, instr)!;
 
     const args: Instr[] = [];
     if (signature && !hl_wasm.isValueType(signature)) {
@@ -264,7 +268,7 @@ export const consumeIndirectCall = (
     });
 }
 
-export const consumeCall = (
+const consumeCall = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
@@ -285,7 +289,7 @@ export const consumeCall = (
     });
 }
 
-export const consumeDrop = (
+const consumeDrop = (
     ctx: IntructionParsingContext
 ) => {
     const exprToDrop = popNonVoidExpression(ctx);
@@ -297,7 +301,7 @@ export const consumeDrop = (
     });
 }
 
-export const consumeSelect = (
+const consumeSelect = (
     ctx: IntructionParsingContext
 ) => {
     const condition = popNonVoidExpression(ctx);
@@ -313,7 +317,7 @@ export const consumeSelect = (
     });
 }
 
-export const consumeGet = (
+const consumeGet = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
@@ -330,7 +334,7 @@ export const consumeGet = (
     });
 }
 
-export const consumeSet = (
+const consumeSet = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
@@ -350,6 +354,9 @@ export const consumeSet = (
         value
     });
     
+    // Although this might mean more instructions
+    // and more memory, it makes the IR a simple structure
+    // to deal with
     if (isTee) {
         pushExpression(ctx, {
             type: hl_wasm.InstructionType.Get,
@@ -359,7 +366,7 @@ export const consumeSet = (
     }
 }
 
-export const tryConsumeLoad = (
+const tryConsumeLoad = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ): boolean => {
@@ -450,7 +457,7 @@ export const tryConsumeLoad = (
     return true;
 }
 
-export const tryConsumeStore = (
+const tryConsumeStore = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ): boolean => {
@@ -515,7 +522,7 @@ export const tryConsumeStore = (
     return true;
 }
 
-export const tryConsumeConst = (
+const tryConsumeConst = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ): boolean => {
@@ -562,7 +569,7 @@ export const tryConsumeConst = (
     return true;
 }
 
-export const tryConsumeUnary = (
+const tryConsumeUnary = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
@@ -615,7 +622,7 @@ export const tryConsumeUnary = (
     return true;
 }
 
-export const tryConsumeBinary = (
+const tryConsumeBinary = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
@@ -725,7 +732,7 @@ export const tryConsumeBinary = (
     return true;
 }
 
-export const tryConsumeConvert = (
+const tryConsumeConvert = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
@@ -796,7 +803,7 @@ export const tryConsumeConvert = (
     return true;
 }
 
-export const tryConsumeMemory = (
+const tryConsumeMemory = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
@@ -822,11 +829,13 @@ export const tryConsumeMemory = (
     return true;
 }
 
+
+
 const getBlock = (
     ctx: IntructionParsingContext,
     signature: hl_wasm.Signature | null
 ) => {
-    ctx.breakStack.push({
+    ctx.branchStack.push({
         type: hl_wasm.InstructionType.Block,
         children: [],
         isLoop: false,
@@ -837,13 +846,16 @@ const getBlock = (
 
     consumeExpressions(ctx);
     
-    // TODO: Assert
-    const block = ctx.breakStack.pop()!;
+    // TODO: Assert block exists
+    const block = ctx.branchStack.pop()!;
 
+    // TODO: Assert ctx.valueStack.length >= start
     dropBlockLeftOvers(ctx, block, start);
 
     return block;
 }
+
+
 
 const consumeExpressions = (
     ctx: IntructionParsingContext
@@ -853,11 +865,6 @@ const consumeExpressions = (
     while (moreInput(ctx)) {
         const instr = readInput(ctx);
 
-        if (ctx.scope?.index === 347) {
-            // console.log('[' + ctx.valueStack.map(e => e.type).join(', '));
-            // console.log(ctx.valueStack.length)
-            // console.log(wasm.Opcode[instr.opcode])
-        }
         switch (instr.opcode) {
             case wasm.Opcode.Else: break;
             case wasm.Opcode.End: break;
@@ -898,6 +905,7 @@ const consumeExpressions = (
             case wasm.Opcode.CallIndirect: {
                 consumeIndirectCall(ctx, instr);
             } break;
+            // TODO:
             // case wasm.Opcode.RefNull: { } break;
             // case wasm.Opcode.RefIsNull: { } break;
             // case wasm.Opcode.RefFunc: { } break;
@@ -917,6 +925,7 @@ const consumeExpressions = (
             case wasm.Opcode.LocalSet: {
                 consumeSet(ctx, instr);
             } break;
+            // TODO:
             // case wasm.Opcode.TableGet: { } break;
             // case wasm.Opcode.TableSet: { } break;
             // case wasm.Opcode.TableInit: { } break;
@@ -937,6 +946,11 @@ const consumeExpressions = (
 
                 throw logging.fatal('Invalid opcode ' + instr.opcode);
             } break;
+
+            // TODO: SIMD
+            // TODO: ATOMICS
+            // TODO: BULK MEMORY
+            // TODO: EXCEPTIONS
         }
         if (
             instr.opcode === wasm.Opcode.End ||
@@ -950,6 +964,8 @@ const consumeExpressions = (
     ctx.isUnreachable = wasUnreachable;
 }
 
+
+
 export const getInstructionExpression = (
     fmt: Format,
     wasmFmt: WasmFormat,
@@ -957,7 +973,7 @@ export const getInstructionExpression = (
     wasmExpr: wasm.InstructionExpression
 ): Instr => {
     const ctx = {
-        breakStack: [],
+        branchStack: [],
         valueStack: [],
         isUnreachable: false,
         lastDelimiter: null,
@@ -968,19 +984,13 @@ export const getInstructionExpression = (
         fmt,
         wasmFmt
     } as IntructionParsingContext;
-    // console.log('\n\n\n\n' + scope?.index)
-    try {
-        const block = getBlock(
-            ctx,
-            scope === null ? null : scope.signature
-        );
 
-        ctx.valueStack.length = 0;
+    const block = getBlock(
+        ctx,
+        scope === null ? null : scope.signature
+    );
 
-        return block;
-    } catch (e) {
-        // console.log(ctx.valueStack);
-        // console.log(scope?.index);
-        throw e
-    }
+    ctx.valueStack.length = 0;
+
+    return block;
 }
