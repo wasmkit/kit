@@ -71,8 +71,6 @@ export interface IntructionParsingContext {
     readonly fmt: Format;
 }
 
-// TODO: FunctionInstructionParsingContext
-
 // Shorthand aliases of hl_wasm types
 export { InstrType };
 export type Instr<
@@ -102,15 +100,14 @@ export type MultiResultInstruction = (
 
 export const peekInput = (
     ctx: IntructionParsingContext
-): wasm.Instruction => {
-    // TODO: Adjust return type
+): wasm.Instruction | null => {
     return ctx.input[ctx.inputPos] ?? null;
 }
 
 export const readInput = (
     ctx: IntructionParsingContext
 ): wasm.Instruction => {
-    // TODO: Assert there is more input
+    logging.assert(moreInput(ctx), "No more input");
     return ctx.input[ctx.inputPos++];
 }
 
@@ -124,15 +121,14 @@ export const moreInput = (
 
 export const peekExpression = (
     ctx: IntructionParsingContext
-): Instr => {
-    // TODO: Adjust result type to contain null
-    return ctx.valueStack.at(-1)!;
+): Instr | null => {
+    return ctx.valueStack.at(-1) ?? null;
 }
 
 export const popExpression = (
     ctx: IntructionParsingContext
 ): Instr => {
-    // TODO: Assert stack is not empty
+    logging.assert(ctx.valueStack.length > 0, "Value stack is empty");
 
     return ctx.valueStack.pop()!;
 }
@@ -206,12 +202,12 @@ const pushMultiResultExpression = (
     expr: MultiResultInstruction
 ) => {
     const signature = expr.signature;
-        // TODO: Assert we are in a function
+    // TODO: (0) Assert we are in a function
     const scope = ctx.scope!;
     const locals: hl_wasm.LocalVariable[] = [];
 
     for (const valueType of signature.results)  {
-        // TODO: Scope.appendLocal()
+        // TODO: (3) Scope.appendLocal()
         const local: hl_wasm.LocalVariable = {
             valueType,
             mutable: true,
@@ -259,7 +255,7 @@ export const getBlockByDepth = (
     ctx: IntructionParsingContext,
     depth: number
 ): Instr<InstrType.Block> => {
-    // TODO: Assert
+    logging.assert(depth < ctx.branchStack.length, "Depth out of bounds");
 
     return ctx.branchStack.at(-depth - 1)!;
 }

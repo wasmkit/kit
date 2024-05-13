@@ -116,8 +116,13 @@ const consumeBlock = (
         ctx.branchStack.push(block);
         blocks.push(block);
 
-        if (!moreInput(ctx)) break;
-        if (peekInput(ctx).opcode !== wasm.Opcode.Block) break;
+        const peek = peekInput(ctx);
+        if (peek === null) {
+            // Unexpected end of code
+            break;
+        }
+
+        if (peek.opcode !== wasm.Opcode.Block) break;
 
         instr = readInput(ctx);
     }
@@ -135,7 +140,7 @@ const consumeBlock = (
         last = block;
         consumeExpressions(ctx);
 
-        // TODO: Assert the valueStack is no smaller than it was before we started
+        logging.assert(ctx.valueStack.length >= start, "Value stack underflow during consumeBlock");
         ctx.branchStack.pop();
 
         dropBlockLeftOvers(ctx, block, start);
@@ -205,8 +210,8 @@ const consumeSwitch = (
 
     const labels = [];
     for (const labelIdx of instr.immediates.labelIndexs!) {
-        // TODO: Assert this block is the same signature
-        // as the default. (Might not be necessary assertion)
+        // TODO: (0) Assert this block is the same signature
+        // as the default
         labels.push(getBlockByDepth(ctx, labelIdx));
     }
 
@@ -228,7 +233,7 @@ const consumeSwitch = (
 const consumeReturn = (
     ctx: IntructionParsingContext
 ) => {
-    // TODO: Assert we are in a function
+    // TODO: (0) Assert we are in a function
     const scope = ctx.scope!;
     const signature = scope.signature;
     if (!signature) return;
@@ -272,7 +277,7 @@ const consumeCall = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
-    // TODO: fmt.getFunction
+    // TODO: (3) fmt.getFunction
     const target = ctx.fmt.functions[instr.immediates.functionIndex!];
     const signature = target.signature;
 
@@ -321,11 +326,14 @@ const consumeGet = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
+    // TODO: (0) Assert we are in a function
+    const scope = ctx.scope!;
+
     const isGlobal = instr.opcode === wasm.Opcode.GlobalGet;
     const index = isGlobal ? instr.immediates.globalIndex!
         : instr.immediates.localIndex!;
 
-    const target = isGlobal ? ctx.fmt.globals[index] : ctx.scope!.locals[index];
+    const target = isGlobal ? ctx.fmt.globals[index] : scope.locals[index];
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Get,
@@ -338,12 +346,15 @@ const consumeSet = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
+    // TODO: (0) Assert we are in a function
+    const scope = ctx.scope!;
+
     const isTee = instr.opcode === wasm.Opcode.LocalTee;
     const isGlobal = instr.opcode === wasm.Opcode.GlobalSet;
     const index = isGlobal ? instr.immediates.globalIndex!
         : instr.immediates.localIndex!;
 
-    const target = isGlobal ? ctx.fmt.globals[index] : ctx.scope!.locals[index];
+    const target = isGlobal ? ctx.fmt.globals[index] : scope.locals[index];
 
     const value = popNonVoidExpression(ctx);
 
@@ -835,21 +846,21 @@ const getBlock = (
     ctx: IntructionParsingContext,
     signature: hl_wasm.Signature | null
 ) => {
-    ctx.branchStack.push({
+    const block: Instr<InstrType.Block> = {
         type: hl_wasm.InstructionType.Block,
         children: [],
         isLoop: false,
         signature
-    });
+    };
+
+    ctx.branchStack.push(block);
 
     const start = ctx.valueStack.length;
 
     consumeExpressions(ctx);
     
-    // TODO: Assert block exists
-    const block = ctx.branchStack.pop()!;
-
-    // TODO: Assert ctx.valueStack.length >= start
+    logging.assert(ctx.branchStack.pop() === block, "Unbalanced branch stack during block parsing")
+    logging.assert(ctx.valueStack.length >= start, "Value stack underflow during block parsing")
     dropBlockLeftOvers(ctx, block, start);
 
     return block;
