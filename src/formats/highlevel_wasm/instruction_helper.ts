@@ -147,7 +147,8 @@ const pushMultiResultExpression = (
             valueType,
             mutable: true,
             isGlobal: false,
-            index: scope.locals.length
+            index: scope.locals.length,
+            isParameter: false
         };
         scope.locals.push(local);
         locals.push(local);

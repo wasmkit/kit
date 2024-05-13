@@ -24,8 +24,9 @@ export type Variable = Indexable & {
 };
 
 export type LocalVariable = Variable & {
-    mutable: true,
-    isGlobal: false
+    mutable: true;
+    isGlobal: false;
+    isParameter: boolean
 };
 
 export type GlobalVariable = Variable & {
@@ -154,7 +155,6 @@ export type Instruction = {
     }>
   | DeclInstrType<InstructionType.Set, {
         target: Variable;
-        isTee: boolean;
         value: Instruction;
     }>
   | DeclInstrType<InstructionType.Load, {

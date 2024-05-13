@@ -237,17 +237,30 @@ const digestFunction = (
     // we need to build the functions first before
     // parsing the bodies, as the bodies can rely on previous
     // function's data.
+    const signature = wasmFmt.signatures[wasmFunction.signatureIndex];
+
+    const paramLocals = signature.params.map<hl_wasm.LocalVariable>((valueType, index) => ({
+        index,
+        valueType,
+        mutable: true,
+        isGlobal: false,
+        isParameter: true
+    }));
+
+    const nonParamLocals = wasmFunction.locals.map<hl_wasm.LocalVariable>((valueType, index) => ({
+        index: index + paramLocals.length,
+        valueType,
+        mutable: true,
+        isGlobal: false,
+        isParameter: false
+    }));
+
     const func = {
         index: fmt.functions.length,
         imported: false,
         exported: false,
         signature: wasmFmt.signatures[wasmFunction.signatureIndex],
-        locals: wasmFunction.locals.map((valueType, index) => ({
-            index,
-            valueType,
-            mutable: true,
-            isGlobal: false
-        })),
+        locals: paramLocals.concat(nonParamLocals),
         body: null as any as hl_wasm.Instruction
     } as hl_wasm.Function;
 
@@ -300,13 +313,15 @@ export const extract = (fmt: Format): void => {
         digestGlobal(fmt, wasmFmt, wasmGlobal);
     }
 
+    const preWasmFunctionCount = fmt.functions.length;
+
     for (const wasmFunction of wasmFmt.functions) {
         digestFunction(fmt, wasmFmt, wasmFunction);
     }
 
     for (let i = 0; i < wasmFmt.functions.length; ++i) {
         const wasmFunction = wasmFmt.functions[i];
-        const hlFunction = fmt.functions[i];
+        const hlFunction = fmt.functions[preWasmFunctionCount + i];
 
         digestInstructions(fmt, wasmFmt, hlFunction, wasmFunction.body);
     }

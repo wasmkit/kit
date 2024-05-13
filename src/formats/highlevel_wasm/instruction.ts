@@ -165,7 +165,16 @@ const consumeBranch = (
 ) => {
     const isConditional = instr.opcode === wasm.Opcode.BrIf;
     const label = getLabelByDepth(ctx, instr.immediates.labelIndex!);
-    const resultCount = getExpressionResultCount(label);
+    const signature = label.signature
+
+    let resultCount = 0;
+    if (!label.isLoop) {
+        if (hl_wasm.isValueType(signature)) {
+            resultCount = 1;
+        } else if (signature) {
+            resultCount = signature.results.length;
+        }
+    }
 
     const condition: Instr | null = isConditional ? popNonVoidExpression(ctx) : null;
 
@@ -176,7 +185,7 @@ const consumeBranch = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Br,
-        signature: null,
+        signature: isConditional ? signature : null,
         label,
         value: values,
         condition
@@ -336,11 +345,18 @@ export const consumeSet = (
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Set,
-        signature: isTee ? target.valueType : null,
+        signature: null,
         target,
-        value,
-        isTee
+        value
     });
+    
+    if (isTee) {
+        pushExpression(ctx, {
+            type: hl_wasm.InstructionType.Get,
+            signature: target.valueType,
+            target
+        });
+    }
 }
 
 export const tryConsumeLoad = (
@@ -449,9 +465,25 @@ export const tryConsumeStore = (
             valueType = wasm.ValueType.I32;
             byteCount = 1;
         } break;
+        case wasm.Opcode.I32Store16: {
+            valueType = wasm.ValueType.I32;
+            byteCount = 2;
+        } break;
         case wasm.Opcode.I64Store: {
             valueType = wasm.ValueType.I64;
             byteCount = 8;
+        } break;
+        case wasm.Opcode.I64Store8: {
+            valueType = wasm.ValueType.I64;
+            byteCount = 1;
+        } break;
+        case wasm.Opcode.I64Store16: {
+            valueType = wasm.ValueType.I64;
+            byteCount = 2;
+        } break;
+        case wasm.Opcode.I64Store32: {
+            valueType = wasm.ValueType.I64;
+            byteCount = 4;
         } break;
         case wasm.Opcode.F32Store: {
             valueType = wasm.ValueType.F32;
@@ -563,6 +595,7 @@ export const tryConsumeUnary = (
             valueType = wasm.ValueType.I32;
         } break;
         case wasm.Opcode.I64Clz:
+        case wasm.Opcode.I64Ctz:
         case wasm.Opcode.I64Eqz:
         case wasm.Opcode.I64Popcnt: {
             valueType = wasm.ValueType.I64;
@@ -763,6 +796,32 @@ export const tryConsumeConvert = (
     return true;
 }
 
+export const tryConsumeMemory = (
+    ctx: IntructionParsingContext,
+    instr: wasm.Instruction
+) => {
+    switch (instr.opcode) {
+        case wasm.Opcode.MemorySize: {
+            pushExpression(ctx, {
+                type: hl_wasm.InstructionType.MemorySize,
+                signature: wasm.ValueType.I32
+            });
+        } break;
+        case wasm.Opcode.MemoryGrow: {
+            const delta = popNonVoidExpression(ctx);
+
+            pushExpression(ctx, {
+                type: hl_wasm.InstructionType.MemoryGrow,
+                signature: wasm.ValueType.I32,
+                delta
+            });
+        } break;
+        default: return false;
+    }
+
+    return true;
+}
+
 const getBlock = (
     ctx: IntructionParsingContext,
     signature: hl_wasm.Signature | null
@@ -774,12 +833,14 @@ const getBlock = (
         signature
     });
 
+    const start = ctx.valueStack.length;
+
     consumeExpressions(ctx);
     
     // TODO: Assert
     const block = ctx.breakStack.pop()!;
 
-    dropBlockLeftOvers(ctx, block, 0);
+    dropBlockLeftOvers(ctx, block, start);
 
     return block;
 }
@@ -792,6 +853,11 @@ const consumeExpressions = (
     while (moreInput(ctx)) {
         const instr = readInput(ctx);
 
+        if (ctx.scope?.index === 347) {
+            // console.log('[' + ctx.valueStack.map(e => e.type).join(', '));
+            // console.log(ctx.valueStack.length)
+            // console.log(wasm.Opcode[instr.opcode])
+        }
         switch (instr.opcode) {
             case wasm.Opcode.Else: break;
             case wasm.Opcode.End: break;
@@ -826,9 +892,11 @@ const consumeExpressions = (
             case wasm.Opcode.Return: {
                 consumeReturn(ctx);
             } break;
-            case wasm.Opcode.Call:
-            case wasm.Opcode.CallIndirect: {
+            case wasm.Opcode.Call: {
                 consumeCall(ctx, instr);
+            } break;
+            case wasm.Opcode.CallIndirect: {
+                consumeIndirectCall(ctx, instr);
             } break;
             // case wasm.Opcode.RefNull: { } break;
             // case wasm.Opcode.RefIsNull: { } break;
@@ -845,7 +913,7 @@ const consumeExpressions = (
                 consumeGet(ctx, instr);
             } break;
             case wasm.Opcode.GlobalSet:
-            case wasm.Opcode.LocalTee: { } break;
+            case wasm.Opcode.LocalTee:
             case wasm.Opcode.LocalSet: {
                 consumeSet(ctx, instr);
             } break;
@@ -859,9 +927,10 @@ const consumeExpressions = (
             // case wasm.Opcode.TableFill: { } break;
             default: {
                 if (tryConsumeLoad(ctx, instr)) break;
+                if (tryConsumeStore(ctx, instr)) break;
                 if (tryConsumeConst(ctx, instr)) break;
                 // if (tryConsumeTable(ctx, instr)) break;
-                // if (tryConsumeMemory(ctx, instr)) break;
+                if (tryConsumeMemory(ctx, instr)) break;
                 if (tryConsumeUnary(ctx, instr)) break;
                 if (tryConsumeBinary(ctx, instr)) break;
                 if (tryConsumeConvert(ctx, instr)) break;
@@ -869,7 +938,6 @@ const consumeExpressions = (
                 throw logging.fatal('Invalid opcode ' + instr.opcode);
             } break;
         }
-
         if (
             instr.opcode === wasm.Opcode.End ||
             instr.opcode === wasm.Opcode.Else
@@ -900,13 +968,19 @@ export const getInstructionExpression = (
         fmt,
         wasmFmt
     } as IntructionParsingContext;
+    // console.log('\n\n\n\n' + scope?.index)
+    try {
+        const block = getBlock(
+            ctx,
+            scope === null ? null : scope.signature
+        );
 
-    const block = getBlock(
-        ctx,
-        scope === null ? null : scope.signature
-    );
+        ctx.valueStack.length = 0;
 
-    ctx.valueStack.length = 0;
-
-    return block;
+        return block;
+    } catch (e) {
+        // console.log(ctx.valueStack);
+        // console.log(scope?.index);
+        throw e
+    }
 }
