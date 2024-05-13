@@ -870,9 +870,11 @@ const consumeExpressions = (
             case wasm.Opcode.End: break;
 
 
-            // The minute we see an unreachable,
-            // all remaining instructions could be invalid 
-            // so we just kill it here
+            // Binaryen likes to kill the IR processing
+            // on encountering the Unreachable, under
+            // the possiblity that invalid code follows
+            // 
+            // But this seems unlikely (if even valid)
             case wasm.Opcode.Unreachable: {
                 pushExpression(ctx, kInstrUnreachable);
                 ctx.isUnreachable = true;

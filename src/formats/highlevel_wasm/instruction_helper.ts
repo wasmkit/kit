@@ -26,9 +26,10 @@ export interface IntructionParsingContext {
     valueStack: hl_wasm.Instruction[];
 
     /**
-     * If the current block is unreachable,
-     * everything must get skipped, as
-     * following code might not be valid IR.
+     * This is unused for now, although in the
+     * future it might be linked up to a binaryen-like
+     * skipping logic that skips IR processing
+     * in unreachable code.
      */
     isUnreachable: boolean;
     
