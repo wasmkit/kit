@@ -201,28 +201,10 @@ export const readInstruction = (v: BytesView): Instruction => {
 
 export const readInstructionExpression = (v: BytesView): Instruction[] => {
     const instructions: Instruction[] = [];
-    let depth = 0;
 
-    while (true) {
-        const instruction = readInstruction(v);
-
-        if (depth === 0 && instruction.opcode === Opcode.End) break;
-
-        instructions.push(instruction);
-
-        switch (instruction.opcode) {
-            case Opcode.End: {
-                // case Opcode.Else:
-                depth -= 1;
-            } break;
-            case Opcode.Block:
-            case Opcode.Loop:
-            case Opcode.If: {
-                // case Opcode.Else:
-                depth += 1;
-            } break;
-        }
+    while (!read.isEOF(v)) {
+        instructions.push(readInstruction(v));
     }
 
-    return [...instructions, TerminatingEndInstruction];
+    return instructions;
 }
