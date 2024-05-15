@@ -19,6 +19,8 @@ export class Format extends AbstractFormat {
     public functions: wasm.Function[] = [];
 }
 
+
+
 const readLimits = (v: BytesView, flags: number = read.vu32(v)): wasm.Limits => {
     const limits: wasm.Limits = {
         min: read.vu32(v)

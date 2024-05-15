@@ -113,8 +113,12 @@ export const string = (view: BytesView, value: string): void => {
     bytes(view, utf8Encode(value));
 }
 
-export const bytes = (view: BytesView, value: Uint8Array): void => {
-    vu32(view, value.length);
+export const bytes = (
+    view: BytesView,
+    value: Uint8Array,
+    writeLength: boolean = true
+): void => {
+    if (writeLength) vu32(view, value.length);
 
     if (!hasSpace(view, value.length)) expand(view, value.length);
 

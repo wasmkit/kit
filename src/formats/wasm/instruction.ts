@@ -1,6 +1,8 @@
 import * as logging from "../../lib/logging";
-import * as read from "../../lib/reader";
+
 import { BytesView } from "../../lib/binary";
+import * as read from "../../lib/reader";
+import * as write from "../../lib/writer";
 
 import {
     Immediates,
@@ -199,6 +201,192 @@ export const readInstruction = (v: BytesView): Instruction => {
     }
 }
 
+export const writeInstruction = (v: BytesView, instr: Instruction): void => {
+    let opcode = instr.opcode;
+
+    if (opcode > 0xFF) {
+        const prefix = opcode >> 8;
+        logging.assert(OpcodePrefixes.includes(prefix), "Invalid opcode prefix");
+
+        write.u8(v, prefix);
+
+        opcode = opcode & 0xFF;
+    }
+
+    write.u8(v, opcode);
+
+    switch (opcode) {
+        case Opcode.Block:
+        case Opcode.Loop:
+        case Opcode.If: {
+            // It has to have one or the other
+            write.vi32(v, instr.immediates.valueType ?? instr.immediates.signatureIndex!);
+        } break;
+        case Opcode.Br:
+        case Opcode.BrIf: {
+            write.vu32(v, instr.immediates.labelIndex!);
+        } break;
+        case Opcode.BrTable: {
+            write.vector(v, instr.immediates.labelIndexs!, write.vu32);
+            write.vu32(v, instr.immediates.defaultLabelIndex!);
+        } break;
+        case Opcode.Call:
+        case Opcode.RefFunc: {
+            write.vu32(v, instr.immediates.functionIndex!);
+        } break;
+        case Opcode.CallIndirect: {
+            write.vu32(v, instr.immediates.signatureIndex!);
+            write.vu32(v, instr.immediates.tableIndex!);
+        } break;
+        case Opcode.RefNull: {
+            write.vu32(v, instr.immediates.refType!);
+        } break;
+        case Opcode.SelectWithType: {
+            write.vector(v, instr.immediates.valueTypes!, write.vu32);
+        } break;
+        case Opcode.LocalGet:
+        case Opcode.LocalSet:
+        case Opcode.LocalTee: {
+            write.vu32(v, instr.immediates.localIndex!);
+        } break;
+        case Opcode.GlobalGet:
+        case Opcode.GlobalSet: {
+            write.vu32(v, instr.immediates.globalIndex!);
+        } break;
+        case Opcode.TableGet:
+        case Opcode.TableSet:
+        case Opcode.TableGrow:
+        case Opcode.TableSize:
+        case Opcode.TableFill: {
+            write.vu32(v, instr.immediates.tableIndex!);
+        } break;
+        case Opcode.TableInit: {
+            write.vu32(v, instr.immediates.elementIndex!);
+            write.vu32(v, instr.immediates.tableIndex!);
+        } break;
+        case Opcode.TableCopy: {
+            write.vu32(v, instr.immediates.fromTableIndex!);
+            write.vu32(v, instr.immediates.toTableIndex!);
+        } break;
+        case Opcode.ElemDrop: {
+            write.vu32(v, instr.immediates.elementIndex!);
+        } break;
+        case Opcode.I32Load:
+        case Opcode.I64Load:
+        case Opcode.F32Load:
+        case Opcode.F64Load:
+        case Opcode.I32Load8_S:
+        case Opcode.I32Load8_U:
+        case Opcode.I32Load16_S:
+        case Opcode.I32Load16_U:
+        case Opcode.I64Load8_S:
+        case Opcode.I64Load8_U:
+        case Opcode.I64Load16_S:
+        case Opcode.I64Load16_U:
+        case Opcode.I64Load32_S:
+        case Opcode.I64Load32_U:
+        case Opcode.I32Store:
+        case Opcode.I64Store:
+        case Opcode.F32Store:
+        case Opcode.F64Store:
+        case Opcode.I32Store8:
+        case Opcode.I32Store16:
+        case Opcode.I64Store8:
+        case Opcode.I64Store16:
+        case Opcode.I64Store32:
+        case Opcode.V128Load:
+        case Opcode.V128Load8x8_S:
+        case Opcode.V128Load8x8_U:
+        case Opcode.V128Load16x4_S:
+        case Opcode.V128Load16x4_U:
+        case Opcode.V128Load32x2_S:
+        case Opcode.V128Load32x2_U:
+        case Opcode.V128Load8Splat:
+        case Opcode.V128Load16Splat:
+        case Opcode.V128Load32Splat:
+        case Opcode.V128Load64Splat:
+        case Opcode.V128Load32Zero:
+        case Opcode.V128Load64Zero:
+        case Opcode.V128Store: {
+            const memarg = instr.immediates.memoryArgument!;
+            write.vu32(v, memarg.align);
+            write.vu32(v, memarg.offset);
+        } break;
+        case Opcode.V128Load8Lane:
+        case Opcode.V128Load16Lane:
+        case Opcode.V128Load32Lane:
+        case Opcode.V128Load64Lane:
+        case Opcode.V128Store8Lane:
+        case Opcode.V128Store16Lane:
+        case Opcode.V128Store32Lane:
+        case Opcode.V128Store64Lane: {
+            const memarg = instr.immediates.memoryArgument!;
+            write.vu32(v, memarg.align);
+            write.vu32(v, memarg.offset);
+            write.u8(v, instr.immediates.laneIndex!);
+        } break;
+        case Opcode.MemorySize:
+        case Opcode.MemoryGrow: {
+            // Memory Index - not in specification
+            write.u8(v, 0);
+        } break;
+        case Opcode.MemoryInit: {
+            write.vu32(v, instr.immediates.dataIndex!);
+            // Memory Index - not in specification
+            write.u8(v, 0);
+        } break;
+        case Opcode.DataDrop: {
+            write.vu32(v, instr.immediates.dataIndex!);
+        } break;
+        case Opcode.MemoryCopy: {
+            // Memory Index - not in specification
+            write.u8(v, 0); // from
+            write.u8(v, 0); // to
+        } break;
+        case Opcode.MemoryFill: {
+            // Memory Index - not in specification
+            write.u8(v, 0);
+        } break;
+        case Opcode.I32Const: {
+            write.vi32(v, instr.immediates.value! as number);
+        } break;
+        case Opcode.I64Const: {
+            write.vi64(v, instr.immediates.value! as bigint);
+        } break;
+        case Opcode.F32Const: {
+            write.f32(v, instr.immediates.value! as number);
+        } break;
+        case Opcode.F64Const: {
+            write.f64(v, instr.immediates.value! as number);
+        } break;
+        case Opcode.V128Const: {
+            write.bytes(v, new Uint8Array(instr.immediates.bytes!), false);
+        } break;
+        case Opcode.I8x16ExtractLane_S:
+        case Opcode.I8x16ExtractLane_U:
+        case Opcode.I8x16ReplaceLane:
+        case Opcode.I16x8ExtractLane_S:
+        case Opcode.I16x8ExtractLane_U:
+        case Opcode.I16x8ReplaceLane:
+        case Opcode.I32x4ExtractLane:
+        case Opcode.I32x4ReplaceLane:
+        case Opcode.I64x2ExtractLane:
+        case Opcode.I64x2ReplaceLane:
+        case Opcode.F32x4ExtractLane:
+        case Opcode.F32x4ReplaceLane:
+        case Opcode.F64x2ExtractLane:
+        case Opcode.F64x2ReplaceLane: {
+            write.u8(v, instr.immediates.laneIndex!);
+        } break;
+        case Opcode.I8x16Shuffle: {
+            write.bytes(v, new Uint8Array(instr.immediates.laneIndexs!), false);
+        } break;
+        default: {
+            logging.assert(KNOWN_OPCODES.includes(opcode), "Unknown opcode " + opcode);
+        } break;
+    }
+}
+
 export const readInstructionExpression = (v: BytesView): Instruction[] => {
     const instructions: Instruction[] = [];
 
@@ -207,4 +395,14 @@ export const readInstructionExpression = (v: BytesView): Instruction[] => {
     }
 
     return instructions;
+}
+
+
+export const writeInstructionExpression = (
+    v: BytesView,
+    instructions: Instruction[]
+): void => {
+    for (const instr of instructions) {
+        writeInstruction(v, instr);
+    }
 }
