@@ -49,11 +49,11 @@ export type ElementSegment = Indexable & {
     type: wasm.RefType;
     initialization: number[] | Instruction[];
 } & (
-    { mode: wasm.ElementSegmentMode.Active, table: Table, offset: Instruction }
+    { mode: wasm.ElementSegmentMode.StandardActive | wasm.ElementSegmentMode.ActiveWithMore, table: Table, offset: Instruction }
   | { mode: wasm.ElementSegmentMode.Declarative | wasm.ElementSegmentMode.Passive }
 );
 
-export type ActiveElementSegment = ElementSegment & { mode: wasm.ElementSegmentMode.Active };
+export type ActiveElementSegment = ElementSegment & { mode: wasm.ElementSegmentMode.StandardActive | wasm.ElementSegmentMode.ActiveWithMore };
 
 export type DataSegment = Indexable & { mode: wasm.DataSegmentMode, initialization: Uint8Array } & (
     { mode: wasm.DataSegmentMode.Passive }

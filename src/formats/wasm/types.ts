@@ -84,9 +84,10 @@ export type Import = { type: ExternalType, module: string, name: string, descrip
 );
 
 export const enum ElementSegmentMode {
-    Active = 0,
-    Passive = 1,
-    Declarative = 2
+    StandardActive = 0b00,
+    ActiveWithMore = 0b10,
+    Passive = 0b01,
+    Declarative = 0b11
 }
 
 export const enum ElementKind {
@@ -98,14 +99,19 @@ export type ElementSegment = {
     type: RefType,
     initialization: number[] | Instruction[][];
 } & (
-    { mode: ElementSegmentMode.Active, tableIndex: number, offset: Instruction[] }
+    { mode: ElementSegmentMode.StandardActive, tableIndex: 0, offset: Instruction[], type: RefType.FuncRef }
+  | { mode: ElementSegmentMode.ActiveWithMore, tableIndex: number, offset: Instruction[], type: RefType }
   | { mode: ElementSegmentMode.Declarative | ElementSegmentMode.Passive }
+) & (
+    { type: RefType.FuncRef }
+  | { type: Omit<RefType, RefType.FuncRef>, initialization: Instruction[][] }
 )
 
 
 export const enum DataSegmentMode {
     Active = 0,
-    Passive = 1
+    Passive = 1,
+    ActiveWithMemoryIndex = 2
 }
 
 

@@ -1,10 +1,11 @@
 import { AbstractFormat } from "../abstract";
 import * as wasm from "./types";
 import * as read from "../../lib/reader";
+import * as write from "../../lib/writer";
 
 import * as logging from "../../lib/logging";
 import { BytesView } from "../../lib/binary";
-import { readInstructionExpression } from "./instruction";
+import { readInstructionExpression, writeInstructionExpression } from "./instruction";
 
 export class Format extends AbstractFormat {
     public signatures: wasm.FuncSignature[] = [];
@@ -19,8 +20,6 @@ export class Format extends AbstractFormat {
     public functions: wasm.Function[] = [];
 }
 
-
-
 const readLimits = (v: BytesView, flags: number = read.vu32(v)): wasm.Limits => {
     const limits: wasm.Limits = {
         min: read.vu32(v)
@@ -29,6 +28,19 @@ const readLimits = (v: BytesView, flags: number = read.vu32(v)): wasm.Limits => 
 
     return limits;
 }
+
+const writeLimits = (v: BytesView, limits: wasm.Limits): void => {
+    const hasMax = Number.isInteger(limits.max);
+
+    const flags = hasMax ? 1 : 0;
+
+    write.vu32(v, flags);
+    write.vu32(v, limits.min);
+
+    if (hasMax) write.vu32(v, limits.max!);
+}
+
+
 
 const readSignature = (v: BytesView): wasm.FuncSignature => {
     logging.assert(read.u8(v) === 0x60, "Invalid function signature");
@@ -39,6 +51,14 @@ const readSignature = (v: BytesView): wasm.FuncSignature => {
     }
 }
 
+const writeSignature = (v: BytesView, sig: wasm.FuncSignature): void => {
+    write.u8(v, 0x60);
+    write.vector(v, sig.params, write.i8);
+    write.vector(v, sig.results, write.i8);
+}
+
+
+
 const readTable = (v: BytesView): wasm.TableType => {
     return {
         refType: read.i8(v),
@@ -46,11 +66,24 @@ const readTable = (v: BytesView): wasm.TableType => {
     }
 }
 
+const writeTable = (v: BytesView, table: wasm.TableType): void => {
+    write.i8(v, table.refType);
+    writeLimits(v, table.limits);
+}
+
+
+
 const readMemory = (v: BytesView): wasm.MemoryType => {
     return {
         limits: readLimits(v)
     }
 }
+
+const writeMemory = (v: BytesView, memory: wasm.MemoryType): void => {
+    writeLimits(v, memory.limits);
+}
+
+
 
 const readGlobalType = (v: BytesView): wasm.GlobalType => {
     const valueType = read.i8(v);
@@ -62,6 +95,13 @@ const readGlobalType = (v: BytesView): wasm.GlobalType => {
     }
 }
 
+const writeGlobalType = (v: BytesView, type: wasm.GlobalType): void => {
+    write.i8(v, type.valueType);
+    write.vu32(v, type.mutable ? 1 : 0);
+}
+
+
+
 const readGlobal = (v: BytesView): wasm.Global => {
     return {
         type: readGlobalType(v),
@@ -69,48 +109,55 @@ const readGlobal = (v: BytesView): wasm.Global => {
     }
 }
 
+const writeGlobal = (v: BytesView, global: wasm.Global): void => {
+    writeGlobalType(v, global.type);
+    writeInstructionExpression(v, global.initialization);
+}
+
+
 
 const readElementSegment = (v: BytesView): wasm.ElementSegment => {
     const modeFlags = read.u8(v) & 0b111;
 
+    const mode = modeFlags & 0b11 as wasm.ElementSegmentMode;
+
+    const maybeNotFuncref = !!(modeFlags & 0b100);
+
     const segment = {
-        mode: modeFlags & 0b1 ? wasm.ElementSegmentMode.Passive : wasm.ElementSegmentMode.Active,
+        mode: mode,
         type: wasm.RefType.FuncRef,
         initialization: []
     } as wasm.ElementSegment;
 
-    const isAnyRef = !!(modeFlags & 0b100);
-
-    if (segment.mode === wasm.ElementSegmentMode.Passive) {
-        if (modeFlags & 0b10) {
-            segment.mode = wasm.ElementSegmentMode.Declarative;
-        }
-
-        if (isAnyRef) {
+    if (
+        segment.mode === wasm.ElementSegmentMode.Passive ||
+        segment.mode === wasm.ElementSegmentMode.Declarative
+    ) {
+        if (maybeNotFuncref) {
             segment.type = read.i8(v);
         } else {
             logging.assert(read.u8(v) === 0, "Expected element kind to be 0");
             segment.type = wasm.RefType.FuncRef;
         }
-    } else if (segment.mode === wasm.ElementSegmentMode.Active) {
-        if (modeFlags & 0b10) {
-            segment.tableIndex = read.vu32(v);
-            segment.offset = readInstructionExpression(v);
-            
-            if (isAnyRef) {
-                segment.type = read.i8(v);
-            } else {
-                logging.assert(read.u8(v) === 0, "Expected element kind to be 0");
-                segment.type = wasm.RefType.FuncRef;
-            }
+    } else if (segment.mode === wasm.ElementSegmentMode.StandardActive) {
+        segment.tableIndex = 0;
+        segment.offset = readInstructionExpression(v);
+        segment.type = wasm.RefType.FuncRef;
+    } else if (segment.mode === wasm.ElementSegmentMode.ActiveWithMore) {
+        // This should really be an else { ... } but the compiler is not smart
+        // enough to figure that out
+        segment.tableIndex = read.vu32(v);
+        segment.offset = readInstructionExpression(v);
+        
+        if (maybeNotFuncref) {
+            segment.type = read.i8(v);
         } else {
-            segment.tableIndex = 0;
-            segment.offset = readInstructionExpression(v);
+            logging.assert(read.u8(v) === 0, "Expected element kind to be 0");
             segment.type = wasm.RefType.FuncRef;
         }
-    }
+    } 
 
-    if (isAnyRef) {
+    if (maybeNotFuncref) {
         segment.initialization = read.vector(v, readInstructionExpression);
     } else {
         segment.initialization = read.vector(v, read.vu32);
@@ -119,14 +166,53 @@ const readElementSegment = (v: BytesView): wasm.ElementSegment => {
     return segment;
 }
 
+const writeElementSegment = (v: BytesView, segment: wasm.ElementSegment): void => {
+    const notFuncRef = segment.type !== wasm.RefType.FuncRef;
+    const modeFlags = segment.mode | (notFuncRef ? 0b100 : 0);
+
+    write.u8(v, modeFlags);
+
+    if (
+        segment.mode === wasm.ElementSegmentMode.Passive ||
+        segment.mode === wasm.ElementSegmentMode.Declarative
+    ) {
+        if (notFuncRef) {
+            write.i8(v, segment.type);
+        } else {
+            write.u8(v, 0);
+        }
+    } else if (segment.mode === wasm.ElementSegmentMode.StandardActive) {
+        writeInstructionExpression(v, segment.offset);
+    } else if (segment.mode === wasm.ElementSegmentMode.ActiveWithMore) {
+        write.vu32(v, segment.tableIndex);
+        writeInstructionExpression(v, segment.offset);
+
+        if (notFuncRef) {
+            write.i8(v, segment.type);
+        } else {
+            write.u8(v, 0);
+        }
+    }
+
+    if (notFuncRef) {
+        write.vector(v, segment.initialization, writeInstructionExpression);
+    } else {
+        write.vector(v, segment.initialization as number[], write.vu32);
+    }
+
+}
+
+
+
 const readDataSegment = (v: BytesView): wasm.DataSegment => {;
     const flags = read.u8(v);
+    const mode = flags & 0b11 as wasm.DataSegmentMode;
     const segment = {
-        mode: flags & 1 as wasm.DataSegmentMode,
-        memoryIndex: flags === 0b10 ? read.vu32(v) : 0
+        mode,
+        memoryIndex: mode === wasm.DataSegmentMode.ActiveWithMemoryIndex ? read.vu32(v) : 0
     } as wasm.DataSegment;
 
-    if (segment.mode === wasm.DataSegmentMode.Active) {
+    if (segment.mode !== wasm.DataSegmentMode.Passive) {
         segment.offset = readInstructionExpression(v);
     }
 
@@ -134,6 +220,31 @@ const readDataSegment = (v: BytesView): wasm.DataSegment => {;
 
     return segment
 }
+
+const writeDataSegment = (v: BytesView, segment: wasm.DataSegment): void => {
+    let flags = segment.mode & 1;
+
+    if (segment.mode !== wasm.DataSegmentMode.Passive) {
+        flags |= segment.memoryIndex === 0 ? 0b00 : 0b10;
+    }
+
+    write.u8(v, flags);
+
+    if (
+        segment.mode !== wasm.DataSegmentMode.Passive
+        && (flags & 0b10)
+    ) {
+        write.vu32(v, segment.memoryIndex!);
+    }
+
+    if (segment.mode !== wasm.DataSegmentMode.Passive) {
+        writeInstructionExpression(v, segment.offset);
+    }
+
+    write.bytes(v, segment.initialization);
+}
+
+
 
 const readExport = (v: BytesView): wasm.Export => {
     const entry = {
@@ -160,6 +271,28 @@ const readExport = (v: BytesView): wasm.Export => {
 
     return entry;
 }
+
+const writeExport = (v: BytesView, entry: wasm.Export): void => {
+    write.string(v, entry.name);
+    write.u8(v, entry.type)
+
+    switch (entry.type) {
+        case wasm.ExternalType.Function: {
+            write.vu32(v, entry.description.functionIndex!);
+        } break;
+        case wasm.ExternalType.Table: {
+            write.vu32(v, entry.description.tableIndex!);
+        } break;
+        case wasm.ExternalType.Memory: {
+            write.vu32(v, entry.description.memoryIndex!);
+        } break;
+        case wasm.ExternalType.Global: {
+            write.vu32(v, entry.description.globalIndex!);
+        } break;
+        default: logging.assert(false, "Unexpected export entry type (" + (entry["type"] ) + ")");
+    }
+}
+
 
 
 const readImport = (v: BytesView): wasm.Import => {
@@ -188,6 +321,30 @@ const readImport = (v: BytesView): wasm.Import => {
 
     return entry;
 }
+
+const writeImport = (v: BytesView, entry: wasm.Import): void => {
+    write.string(v, entry.module);
+    write.string(v, entry.name);
+    write.u8(v, entry.type);
+
+    switch (entry.type) {
+        case wasm.ExternalType.Function: {
+            write.vu32(v, entry.description.signatureIndex!);
+        } break;
+        case wasm.ExternalType.Table: {
+            writeTable(v, entry.description.tableType!);
+        } break;
+        case wasm.ExternalType.Memory: {
+            writeMemory(v, entry.description.memoryType!);
+        } break;
+        case wasm.ExternalType.Global: {
+            writeGlobalType(v, entry.description.globalType!);
+        } break;
+        default: logging.assert(false, "Unexpected export entry type (" + (entry["type"] ) + ")");
+    }
+}
+
+
 
 export const extract = (fmt: Format): void => {
     const { kit } = fmt;

@@ -100,7 +100,10 @@ const digestElementSegment = (
         wasmSeg
     );
 
-    if (wasmSeg.mode !== wasm.ElementSegmentMode.Active) {
+    if (
+        wasmSeg.mode !== wasm.ElementSegmentMode.ActiveWithMore &&
+        wasmSeg.mode !== wasm.ElementSegmentMode.StandardActive
+    ) {
         fmt.elements.push({
             index: fmt.elements.length,
             mode: wasmSeg.mode,
@@ -115,7 +118,7 @@ const digestElementSegment = (
 
     const seg = {
         index: fmt.elements.length,
-        mode: wasm.ElementSegmentMode.Active,
+        mode: wasmSeg.mode,
         type: wasmSeg.type,
         table: table,
         offset: getInstructionExpression(fmt, wasmFmt, null, wasmSeg.offset),
@@ -136,7 +139,7 @@ const digestDataSegment = (
     // only differs in whether they or active or not.
     // 
 
-    if (wasmSeg.mode !== wasm.DataSegmentMode.Active) {
+    if (wasmSeg.mode === wasm.DataSegmentMode.Passive) {
         fmt.datas.push({
             index: fmt.datas.length,
             mode: wasmSeg.mode,
@@ -154,10 +157,10 @@ const digestDataSegment = (
         memory: memory,
         offset: getInstructionExpression(fmt, wasmFmt, null, wasmSeg.offset),
         initialization: wasmSeg.initialization
-    };
+    } as hl_wasm.ActiveDataSegment;
 
     // To rid us of the readonly
-    (memory.activeSegments as typeof seg[]).push(seg);
+    (memory.activeSegments as hl_wasm.ActiveDataSegment[]).push(seg);
     fmt.datas.push(seg);
 }
 
