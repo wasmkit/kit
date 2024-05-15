@@ -44,6 +44,7 @@ export const u32 = (view: BytesView, value: number): void => {
 
     c_u32[0] = value;
     view.bytes.set(c_u8.subarray(0, 4), view.at);
+    view.at += 4;
 }
 
 export const vi32 = (view: BytesView, value: number): void => {
