@@ -50,7 +50,7 @@ export const vi32 = (view: BytesView, value: number): void => {
     // Should be just to 5, 6 in case
     if (!hasSpace(view, 6)) expand(view);
 
-    while (true) {
+    while (value) {
         let byte = value & 0x7F;
 
         value >>= 7;
@@ -68,7 +68,7 @@ export const vu32 = (view: BytesView, value: number): void => {
     // Should be just to 5, 6 in case
     if (!hasSpace(view, 6)) expand(view);
 
-    while (true) {
+    while (value) {
         let byte = value & 0x7F;
 
         value >>= 7;
@@ -81,7 +81,7 @@ export const vi64 = (view: BytesView, value: bigint): void => {
     // Should be just to 9, 10 in case
     if (!hasSpace(view, 10)) expand(view);
 
-    while (true) {
+    while (value !== 0n) {
         let byte = Number(value & 0x7Fn);
 
         value >>= 7n;
@@ -118,6 +118,7 @@ export const bytes = (
     value: Uint8Array,
     writeLength: boolean = true
 ): void => {
+
     if (writeLength) vu32(view, value.length);
 
     if (!hasSpace(view, value.length)) expand(view, value.length);
