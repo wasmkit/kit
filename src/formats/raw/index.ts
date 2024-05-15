@@ -1,6 +1,7 @@
 import { AbstractFormat } from "../abstract";
 import { BytesView } from "../../lib/binary";
-import * as read  from "../../lib/reader";
+import * as read from "../../lib/reader";
+import * as write from "../../lib/writer";
 import * as logging from "../../lib/logging";
 
 const FILE_MAGIC = 0x6D736100;
@@ -34,7 +35,7 @@ interface Metadata {
     version: typeof FILE_VERSION;
 }
 
-export class Format extends AbstractFormat implements SectionRecords {
+export class RawFormat extends AbstractFormat implements SectionRecords {
     public readonly metadata: Metadata =  {
         magic: FILE_MAGIC,
         version: FILE_VERSION
@@ -53,40 +54,122 @@ export class Format extends AbstractFormat implements SectionRecords {
     public code: Uint8Array | null = null;
     public data: Uint8Array | null = null;
     public dataCount: Uint8Array | null = null;
-}
 
-export const extract = (fmt: Format): void => {
-    const { kit } = fmt;
-    const v = new BytesView(kit.bytes);
+    public compile(): void {
+        const { kit } = this;
 
-    logging.assert(read.u32(v) === FILE_MAGIC, "Invalid file magic");
-    logging.assert(read.u32(v) === FILE_VERSION, "Invalid file version");
+        const v = new BytesView();
 
-    while (read.isEOF(v) === false) {
-        const id = read.u8(v);
+        write.u32(v, FILE_MAGIC);
+        write.u32(v, FILE_VERSION);
 
-        const size = read.vu32(v);
-
-        logging.assert(id < SectionId.kMax, "Invalid section id");
-
-        if (id !== 0) {
-            const sectionName = SectionId[id].toLowerCase() as KnownSectionName;
-            logging.assert(fmt[sectionName] === null, "Duplicate section id");
-
-            fmt[sectionName] = read.bytes(v, size);
-
-            continue;
+        if (this.signature) {
+            write.u8(v, SectionId.Signature);
+            write.bytes(v, this.signature);
         }
 
-        const end = v.at + size;
-        const name = read.string(v);
-
-        // Don't complain about duplicates, but we can warn
-        if (fmt.custom.has(name)) {
-            console.warn("Duplicate custom section. Disgarding stale data");
-            console.warn(fmt.custom.get(name)!);
+        if (this.import) {
+            write.u8(v, SectionId.Import);
+            write.bytes(v, this.import);
         }
 
-        fmt.custom.set(name, read.bytes(v, end - v.at));
+        if (this.function) {
+            write.u8(v, SectionId.Function);
+            write.bytes(v, this.function);
+        }
+
+        if (this.table) {
+            write.u8(v, SectionId.Table);
+            write.bytes(v, this.table);
+        }
+
+        if (this.memory) {
+            write.u8(v, SectionId.Memory);
+            write.bytes(v, this.memory);
+        }
+
+        if (this.global) {
+            write.u8(v, SectionId.Global);
+            write.bytes(v, this.global);
+        }
+
+        if (this.export) {
+            write.u8(v, SectionId.Export);
+            write.bytes(v, this.export);
+        }
+
+        if (this.start) {
+            write.u8(v, SectionId.Start);
+            write.bytes(v, this.start);
+        }
+
+        if (this.element) {
+            write.u8(v, SectionId.Element);
+            write.bytes(v, this.element);
+        }
+
+        if (this.code) {
+            write.u8(v, SectionId.Code);
+            write.bytes(v, this.code);
+        }
+
+        if (this.data) {
+            write.u8(v, SectionId.Data);
+            write.bytes(v, this.data);
+        }
+
+        if (this.dataCount) {
+            write.u8(v, SectionId.DataCount);
+            write.bytes(v, this.dataCount);
+        }
+
+        for (const [name, data] of this.custom) {
+            write.u8(v, SectionId.Custom);
+
+            const v2 = new BytesView();
+
+            write.string(v2, name);
+            write.bytes(v2, data, false);
+
+            write.bytes(v, v2.bytes.subarray(0, v2.at));
+        }
+
+        kit.loadBytes(v.bytes.subarray(0, v.at)); 
+    }
+
+    public extract(): void {
+        const { kit } = this;
+        const v = new BytesView(kit.bytes);
+
+        logging.assert(read.u32(v) === FILE_MAGIC, "Invalid file magic");
+        logging.assert(read.u32(v) === FILE_VERSION, "Invalid file version");
+
+        while (read.isEOF(v) === false) {
+            const id = read.u8(v);
+
+            const size = read.vu32(v);
+
+            logging.assert(id < SectionId.kMax, "Invalid section id");
+
+            if (id !== 0) {
+                const sectionName = SectionId[id].toLowerCase() as KnownSectionName;
+                logging.assert(this[sectionName] === null, "Duplicate section id");
+
+                this[sectionName] = read.bytes(v, size);
+
+                continue;
+            }
+
+            const end = v.at + size;
+            const name = read.string(v);
+
+            // Don't complain about duplicates, but we can warn
+            if (this.custom.has(name)) {
+                console.warn("Duplicate custom section. Disgarding stale data");
+                console.warn(this.custom.get(name)!);
+            }
+
+            this.custom.set(name, read.bytes(v, end - v.at));
+        }
     }
 }

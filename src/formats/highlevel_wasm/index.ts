@@ -1,12 +1,12 @@
 import { AbstractFormat } from "../abstract";
-import { Format as WasmFormat } from "../wasm/";
+import { WasmFormat as WasmFormat } from "../wasm/";
 
 import * as wasm from "../wasm/types";
 import * as hl_wasm from "./types";
 
 import { getInstructionExpression } from "./instruction";
 
-export class Format extends AbstractFormat {
+export class HighlevelFormat extends AbstractFormat {
     /**
      * Contains all tables known to the module
      * - This includes imported as well
@@ -60,11 +60,74 @@ export class Format extends AbstractFormat {
     ): void {
         scope.locals.push(local);
     }
+
+
+
+    public extract(): void {
+        const { kit } = this;
+    
+        const wasmFmt = kit.wasm();
+    
+        this.datas = [];
+        this.elements = [];
+        this.functions = [];
+        this.globals = [];
+        this.memories = [];
+        this.tables = [];
+        this.start = undefined;
+    
+    
+        for (const wasmImport of wasmFmt.imports) {
+            digestImport(this, wasmFmt, wasmImport);
+        }
+    
+        for (const wasmMemory of wasmFmt.memories) {
+            digestMemory(this, wasmFmt, wasmMemory);
+        }
+    
+        for (const wasmTable of wasmFmt.tables) {
+            digestTable(this, wasmFmt, wasmTable);
+        }
+    
+        for (const wasmGlobal of wasmFmt.globals) {
+            digestGlobal(this, wasmFmt, wasmGlobal);
+        }
+    
+        const preWasmFunctionCount = this.functions.length;
+    
+        for (const wasmFunction of wasmFmt.functions) {
+            digestFunction(this, wasmFmt, wasmFunction);
+        }
+    
+        for (let i = 0; i < wasmFmt.functions.length; ++i) {
+            const wasmFunction = wasmFmt.functions[i];
+            const hlFunction = this.functions[preWasmFunctionCount + i];
+    
+            digestInstructions(this, wasmFmt, hlFunction, wasmFunction.body);
+        }
+    
+        for (const wasmExport of wasmFmt.exports) {
+            digestExport(this, wasmFmt, wasmExport);
+        }
+        
+        for (const wasmSeg of wasmFmt.elements) {
+            digestElementSegment(this, wasmFmt, wasmSeg);
+        }
+    
+        for (const wasmSeg of wasmFmt.datas) {
+            digestDataSegment(this, wasmFmt, wasmSeg);
+        }
+    }    
+
+    public compile(): void {
+        // TODO
+    }
 }
 
 
+
 const getElementSegmentInitialization = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     wasmFmt: WasmFormat,
     wasmSeg: wasm.ElementSegment
 ): number[] | hl_wasm.Instruction[] => {
@@ -83,7 +146,7 @@ const getElementSegmentInitialization = (
 }
 
 const digestElementSegment = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     wasmFmt: WasmFormat,
     wasmSeg: wasm.ElementSegment
 ): void => {
@@ -130,7 +193,7 @@ const digestElementSegment = (
 }
 
 const digestDataSegment = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     wasmFmt: WasmFormat,
     wasmSeg: wasm.DataSegment
 ): void => {
@@ -165,7 +228,7 @@ const digestDataSegment = (
 }
 
 const digestGlobal = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     wasmFmt: WasmFormat,
     wasmGlobal: wasm.Global
 ): void => {
@@ -181,7 +244,7 @@ const digestGlobal = (
 }
 
 const digestMemory = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     _wasmFmt: WasmFormat,
     memory: wasm.MemoryType
 ): void => {
@@ -195,7 +258,7 @@ const digestMemory = (
 }
 
 const digestTable = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     _wasmFmt: WasmFormat,
     wasmTable: wasm.TableType,
 ): void => {
@@ -210,7 +273,7 @@ const digestTable = (
 }
 
 const digestExport = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     _wasmFmt: WasmFormat,
     wasmExport: wasm.Export
 ): void => {
@@ -261,7 +324,7 @@ const digestExport = (
 }
 
 const digestImport = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     wasmFmt: WasmFormat,
     wasmImport: wasm.Import
 ): void => {
@@ -315,7 +378,7 @@ const digestImport = (
 }
 
 const digestFunction = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     wasmFmt: WasmFormat,
     wasmFunction: wasm.Function
 ) => {
@@ -356,7 +419,7 @@ const digestFunction = (
 }
 
 const digestInstructions = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     wasmFmt: WasmFormat,
     hlFunction: hl_wasm.Function,
     wasmInstructions: wasm.Instruction[]
@@ -374,60 +437,4 @@ const digestInstructions = (
         hlFunction,
         wasmInstructions
     );
-}
-
-export const extract = (fmt: Format): void => {
-    const { kit } = fmt;
-
-    const wasmFmt = kit.wasm();
-
-    fmt.datas = [];
-    fmt.elements = [];
-    fmt.functions = [];
-    fmt.globals = [];
-    fmt.memories = [];
-    fmt.tables = [];
-    fmt.start = undefined;
-
-
-    for (const wasmImport of wasmFmt.imports) {
-        digestImport(fmt, wasmFmt, wasmImport);
-    }
-
-    for (const wasmMemory of wasmFmt.memories) {
-        digestMemory(fmt, wasmFmt, wasmMemory);
-    }
-
-    for (const wasmTable of wasmFmt.tables) {
-        digestTable(fmt, wasmFmt, wasmTable);
-    }
-
-    for (const wasmGlobal of wasmFmt.globals) {
-        digestGlobal(fmt, wasmFmt, wasmGlobal);
-    }
-
-    const preWasmFunctionCount = fmt.functions.length;
-
-    for (const wasmFunction of wasmFmt.functions) {
-        digestFunction(fmt, wasmFmt, wasmFunction);
-    }
-
-    for (let i = 0; i < wasmFmt.functions.length; ++i) {
-        const wasmFunction = wasmFmt.functions[i];
-        const hlFunction = fmt.functions[preWasmFunctionCount + i];
-
-        digestInstructions(fmt, wasmFmt, hlFunction, wasmFunction.body);
-    }
-
-    for (const wasmExport of wasmFmt.exports) {
-        digestExport(fmt, wasmFmt, wasmExport);
-    }
-    
-    for (const wasmSeg of wasmFmt.elements) {
-        digestElementSegment(fmt, wasmFmt, wasmSeg);
-    }
-
-    for (const wasmSeg of wasmFmt.datas) {
-        digestDataSegment(fmt, wasmFmt, wasmSeg);
-    }
 }

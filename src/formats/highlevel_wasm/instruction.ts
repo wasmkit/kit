@@ -1,7 +1,7 @@
 import * as logging from "../../lib/logging";
 
-import type { Format } from "./index";
-import { Format as WasmFormat } from "../wasm/";
+import type { WasmFormat as WasmFormat } from "../wasm/";
+import type { HighlevelFormat } from "./index";
 
 import * as wasm from "../wasm/types";
 import * as hl_wasm from "./types";
@@ -999,7 +999,7 @@ const consumeExpressions = (
 
 
 export const getInstructionExpression = (
-    fmt: Format,
+    fmt: HighlevelFormat,
     wasmFmt: WasmFormat,
     scope: hl_wasm.UnimportedFunction | null,
     wasmExpr: wasm.Instruction[]

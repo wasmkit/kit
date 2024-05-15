@@ -1,6 +1,12 @@
 import { AbstractFormat } from "../abstract";
 
 
-export class Format extends AbstractFormat {}
+export class LLVMFormat extends AbstractFormat {
+    public extract(): void {
+        
+    }
 
-export const extract = (fmt: Format): void => {}
+    public compile(): void {
+        
+    }
+}

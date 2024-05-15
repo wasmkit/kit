@@ -1,5 +1,5 @@
-import type { Format } from "./index";
-import { Format as WasmFormat } from "../wasm/";
+import type { HighlevelFormat } from "./index";
+import { WasmFormat as WasmFormat } from "../wasm/";
 
 import * as wasm from "../wasm/types";
 import * as hl_wasm from "./types";
@@ -68,7 +68,7 @@ export interface IntructionParsingContext {
     /**
      * Cached hl_wasm format data.
      */
-    readonly fmt: Format;
+    readonly fmt: HighlevelFormat;
 }
 
 // Shorthand aliases of hl_wasm types

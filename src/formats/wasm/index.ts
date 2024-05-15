@@ -7,7 +7,7 @@ import * as logging from "../../lib/logging";
 import { BytesView } from "../../lib/binary";
 import { readInstructionExpression, writeInstructionExpression } from "./instruction";
 
-export class Format extends AbstractFormat {
+export class WasmFormat extends AbstractFormat {
     public signatures: wasm.FuncSignature[] = [];
     public tables: wasm.TableType[] = [];
     public memories: wasm.MemoryType[] = [];
@@ -18,7 +18,152 @@ export class Format extends AbstractFormat {
     public imports: wasm.Import[] = [];
     public exports: wasm.Export[] = [];
     public functions: wasm.Function[] = [];
+
+    public extract(): void {
+        const { kit } = this;
+        const sections = kit.raw();
+    
+        if (sections.signature) {
+            this.signatures = read.vector(new BytesView(sections.signature), readSignature);
+        }
+        if (sections.table) {
+            this.tables = read.vector(new BytesView(sections.table), readTable);
+        }
+        if (sections.memory) {
+            this.memories = read.vector(new BytesView(sections.memory), readMemory);
+        }
+        if (sections.global) {
+            this.globals = read.vector(new BytesView(sections.global), readGlobal);
+        }
+        if (sections.element) {
+            this.elements = read.vector(new BytesView(sections.element), readElementSegment);
+        }
+        if (sections.data) {
+            this.datas = read.vector(new BytesView(sections.data), readDataSegment);
+        }
+        if (sections.start) {
+            this.start = read.u32(new BytesView(sections.start));
+        }
+        if (sections.import) {
+            this.imports = read.vector(new BytesView(sections.import), readImport);
+        }
+        if (sections.export) {
+            this.exports = read.vector(new BytesView(sections.export), readExport);
+        }
+    
+        if (sections.function && sections.code) {
+            const signatureIndices = read.vector(new BytesView(sections.function), read.vu32);
+            this.functions = read.vector<wasm.Function>(new BytesView(sections.code), (v, i) => {
+                const fv = new BytesView(read.bytes(v));
+    
+                return {
+                    signatureIndex: signatureIndices[i],
+                    locals: read.vector<wasm.ValueType[]>(fv, () => {
+                        return Array<wasm.ValueType>(read.vu32(fv)).fill(read.i8(fv));
+                    }).flat(),
+                    body: readInstructionExpression(fv)
+                }
+            });
+        }
+    }
+
+    public compile(): void {
+        const { kit } = this;
+        const raw = kit.raw();
+    
+        if (this.signatures.length) {
+            const v = new BytesView();
+            write.vector(v, this.signatures, writeSignature);
+            raw.signature = v.bytes.subarray(0, v.at);
+        } else raw.signature = null;
+    
+        if (this.tables.length) {
+            const v = new BytesView();
+            write.vector(v, this.tables, writeTable);
+            raw.table = v.bytes.subarray(0, v.at);
+        } else raw.table = null;
+    
+        if (this.memories.length) {
+            const v = new BytesView();
+            write.vector(v, this.memories, writeMemory);
+            raw.memory = v.bytes.subarray(0, v.at);
+        } else raw.memory = null;
+    
+        // if (fmt.globals.length) {
+        //     const v = new BytesView();
+        //     write.vector(v, fmt.globals, writeGlobal);
+        //     raw.global = v.bytes.subarray(0, v.at);
+        // } else raw.global = null;
+    
+        // if (fmt.elements.length) {
+        //     const v = new BytesView();
+        //     write.vector(v, fmt.elements, writeElementSegment);
+        //     raw.element = v.bytes.subarray(0, v.at);
+        // } else raw.element = null;
+    
+        // if (fmt.datas.length) {
+        //     const v = new BytesView();
+        //     write.vector(v, fmt.datas, writeDataSegment);
+        //     raw.data = v.bytes.subarray(0, v.at);
+        // } else raw.data = null;
+    
+        // if (fmt.start !== undefined) {
+        //     const v = new BytesView();
+        //     write.u32(v, fmt.start);
+        //     raw.start = v.bytes.subarray(0, v.at);
+        // } else raw.start = null;
+    
+        // if (fmt.imports.length) {
+        //     const v = new BytesView();
+        //     write.vector(v, fmt.imports, writeImport);
+        //     raw.import = v.bytes.subarray(0, v.at);
+        // } else raw.import = null;
+    
+        // if (fmt.exports.length) {
+        //     const v = new BytesView();
+        //     write.vector(v, fmt.exports, writeExport);
+        //     raw.export = v.bytes.subarray(0, v.at);
+        // } else raw.export = null;
+    
+        // if (fmt.functions.length) {
+        //     const v = new BytesView();
+        //     const signatureIndices = fmt.functions.map(f => f.signatureIndex);
+        //     write.vector(v, signatureIndices, write.vu32);
+        //     raw.function = v.bytes.subarray(0, v.at);
+    
+        //     const v2 = new BytesView();
+        //     for (const f of fmt.functions) {
+        //         const v = new BytesView();
+                
+        //         const localsPacked: [wasm.ValueType, number][] = [];
+        //         let lastType: wasm.ValueType | null = null;
+        //         for (const local of f.locals) {
+        //             if (local === lastType) {
+        //                 localsPacked[localsPacked.length - 1][1]++;
+        //             } else {
+        //                 localsPacked.push([local, 1]);
+        //                 lastType = local;
+        //             }
+        //         }
+    
+        //         write.vector(v, localsPacked, (v, [type, count]) => {
+        //             write.vu32(v, count);
+        //             write.i8(v, type);
+        //         });
+        //         writeInstructionExpression(v, f.body);
+    
+        //         write.bytes(v2, v.bytes.subarray(0, v.at));
+        //     }
+        // } else {
+        //     raw.function = null;
+        //     raw.code = null;
+        // }
+    
+        kit.raw().compile();
+    }    
 }
+
+
 
 const readLimits = (v: BytesView, flags: number = read.vu32(v)): wasm.Limits => {
     const limits: wasm.Limits = {
@@ -341,55 +486,5 @@ const writeImport = (v: BytesView, entry: wasm.Import): void => {
             writeGlobalType(v, entry.description.globalType!);
         } break;
         default: logging.assert(false, "Unexpected export entry type (" + (entry["type"] ) + ")");
-    }
-}
-
-
-
-export const extract = (fmt: Format): void => {
-    const { kit } = fmt;
-    const sections = kit.raw();
-
-    if (sections.signature) {
-        fmt.signatures = read.vector(new BytesView(sections.signature), readSignature);
-    }
-    if (sections.table) {
-        fmt.tables = read.vector(new BytesView(sections.table), readTable);
-    }
-    if (sections.memory) {
-        fmt.memories = read.vector(new BytesView(sections.memory), readMemory);
-    }
-    if (sections.global) {
-        fmt.globals = read.vector(new BytesView(sections.global), readGlobal);
-    }
-    if (sections.element) {
-        fmt.elements = read.vector(new BytesView(sections.element), readElementSegment);
-    }
-    if (sections.data) {
-        fmt.datas = read.vector(new BytesView(sections.data), readDataSegment);
-    }
-    if (sections.start) {
-        fmt.start = read.u32(new BytesView(sections.start));
-    }
-    if (sections.import) {
-        fmt.imports = read.vector(new BytesView(sections.import), readImport);
-    }
-    if (sections.export) {
-        fmt.exports = read.vector(new BytesView(sections.export), readExport);
-    }
-
-    if (sections.function && sections.code) {
-        const signatureIndices = read.vector(new BytesView(sections.function), read.vu32);
-        fmt.functions = read.vector<wasm.Function>(new BytesView(sections.code), (v, i) => {
-            const fv = new BytesView(read.bytes(v));
-
-            return {
-                signatureIndex: signatureIndices[i],
-                locals: read.vector<wasm.ValueType[]>(fv, () => {
-                    return Array<wasm.ValueType>(read.vu32(fv)).fill(read.i8(fv));
-                }).flat(),
-                body: readInstructionExpression(fv)
-            }
-        });
     }
 }
