@@ -47,6 +47,19 @@ export class Format extends AbstractFormat {
      * Contains the start function index, if existant
      */
     public start?: number;
+
+
+
+    public getFunction(index: number): hl_wasm.Function {
+        return this.functions[index];
+    }
+
+    public appendLocal(
+        scope: hl_wasm.UnimportedFunction,
+        local: hl_wasm.LocalVariable
+    ): void {
+        scope.locals.push(local);
+    }
 }
 
 

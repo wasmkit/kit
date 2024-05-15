@@ -207,7 +207,6 @@ const pushMultiResultExpression = (
     const locals: hl_wasm.LocalVariable[] = [];
 
     for (const valueType of signature.results)  {
-        // TODO: (3) Scope.appendLocal()
         const local: hl_wasm.LocalVariable = {
             valueType,
             mutable: true,
@@ -215,7 +214,7 @@ const pushMultiResultExpression = (
             index: scope.locals.length,
             isParameter: false
         };
-        scope.locals.push(local);
+        ctx.fmt.appendLocal(scope, local);
         locals.push(local);
     }
 

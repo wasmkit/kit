@@ -297,8 +297,7 @@ const consumeCall = (
     ctx: IntructionParsingContext,
     instr: wasm.Instruction
 ) => {
-    // TODO: (3) fmt.getFunction
-    const target = ctx.fmt.functions[instr.immediates.functionIndex!];
+    const target = ctx.fmt.getFunction(instr.immediates.functionIndex!);
     const signature = target.signature;
 
     const args: Instr[] = [];

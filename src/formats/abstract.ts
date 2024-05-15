@@ -7,6 +7,7 @@ export type FormatCtor<
 export abstract class AbstractFormat {
     public kit: Kit;
     public options: any;
+
     public constructor(kit: Kit, options?: any) {
         this.kit = kit;
         this.options = options;

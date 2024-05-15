@@ -26,8 +26,8 @@ export class Kit {
     private _formatCache: MapByFormatDeclaration;
     
     private constructor(bytes: Uint8Array) {
-        this.bytes = new Uint8Array(bytes);
         this._formatCache = new Map();
+        this.bytes = new Uint8Array(bytes);
     }
     
     public as<
@@ -40,8 +40,12 @@ export class Kit {
             return this._formatCache.get(fmtDeclare) as InstanceType<T["Format"]>;
         }
 
-        logging.assert(typeof fmtDeclare.extract === "function", "Provided format is missing `extract` implementation");
+        logging.assert(
+            typeof fmtDeclare.extract === "function",
+            "Provided format is missing `extract` implementation"
+        );
 
+        
         const mod = new Format(this, options);
 
         fmtDeclare.extract!(mod);
