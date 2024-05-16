@@ -17,7 +17,7 @@ const KNOWN_OPCODES = Object.values(Opcode).filter(e => typeof e === "number");
 export const readInstruction = (v: BytesView): Instruction => {
     let opcode: Opcode = read.u8(v);
 
-    if (OpcodePrefixes.includes(opcode)) opcode = opcode << 8 | read.vu32(v);
+    if (OpcodePrefixes.includes(opcode)) opcode = opcode << 8 | read.u8(v);
 
     const immediates: Immediates = {};
 
@@ -27,7 +27,7 @@ export const readInstruction = (v: BytesView): Instruction => {
         case Opcode.If: {
             const type = read.vi32(v);
 
-            if (type & 0x8000_0000) immediates.valueType = type;
+            if (type < 0) immediates.valueType = type;
             else immediates.signatureIndex = type;
         } break;
         case Opcode.Br:
@@ -47,10 +47,10 @@ export const readInstruction = (v: BytesView): Instruction => {
             immediates.tableIndex = read.vu32(v);
         } break;
         case Opcode.RefNull: {
-            immediates.refType = read.vu32(v);
+            immediates.refType = read.vi32(v);
         } break;
         case Opcode.SelectWithType: {
-            immediates.valueTypes = read.vector(v, read.vu32);
+            immediates.valueTypes = read.vector(v, read.vi32);
         } break;
         case Opcode.LocalGet:
         case Opcode.LocalSet:
@@ -239,10 +239,10 @@ export const writeInstruction = (v: BytesView, instr: Instruction): void => {
             write.vu32(v, instr.immediates.tableIndex!);
         } break;
         case Opcode.RefNull: {
-            write.vu32(v, instr.immediates.refType!);
+            write.vi32(v, instr.immediates.refType!);
         } break;
         case Opcode.SelectWithType: {
-            write.vector(v, instr.immediates.valueTypes!, write.vu32);
+            write.vector(v, instr.immediates.valueTypes!, write.vi32);
         } break;
         case Opcode.LocalGet:
         case Opcode.LocalSet:
@@ -391,7 +391,8 @@ export const readInstructionExpression = (v: BytesView): Instruction[] => {
     const instructions: Instruction[] = [];
     let depth = 0;
 
-    while (true) {
+    while (read.isEOF(v) === false) {
+
         const instruction = readInstruction(v);
 
         if (depth === 0 && instruction.opcode === Opcode.End) break;
@@ -412,6 +413,8 @@ export const readInstructionExpression = (v: BytesView): Instruction[] => {
         }
     }
 
+    logging.assert(depth === 0, "Unexpected expression end");
+
     return [...instructions, TerminatingEndInstruction];
 }
 
@@ -420,7 +423,24 @@ export const writeInstructionExpression = (
     v: BytesView,
     instructions: Instruction[]
 ): void => {
+    let depth = 0;
     for (const instr of instructions) {
         writeInstruction(v, instr);
+
+
+        switch (instr.opcode) {
+            case Opcode.End: {
+                // case Opcode.Else:
+                depth -= 1;
+            } break;
+            case Opcode.Block:
+            case Opcode.Loop:
+            case Opcode.If: {
+                // case Opcode.Else:
+                depth += 1;
+            } break;
+        }
     }
+
+    logging.assert(depth === -1, "Instruction expression not properly terminated");
 }

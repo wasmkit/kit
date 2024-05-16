@@ -15,7 +15,7 @@ export const isEOF = (view: BytesView): boolean => {
 
 export const u8 = (view: BytesView): number => view.bytes[view.at++];
 
-export const i8 = (view: BytesView): number => {
+export const i7 = (view: BytesView): number => {
     return (u8(view) << 25) >> 25;
 }
 

@@ -33,7 +33,7 @@ export const u8 = (view: BytesView, value: number): void => {
     view.bytes[view.at++] = value;
 }
 
-export const i8 = (view: BytesView, value: number): void => {
+export const i7 = (view: BytesView, value: number): void => {
     if (!hasSpace(view, 1)) expand(view);
 
     view.bytes[view.at++] = (value << 25) >>> 25;

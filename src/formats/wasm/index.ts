@@ -42,7 +42,7 @@ export class WasmFormat extends AbstractFormat {
             this.datas = read.vector(new BytesView(sections.data), readDataSegment);
         }
         if (sections.start) {
-            this.start = read.u32(new BytesView(sections.start));
+            this.start = read.vu32(new BytesView(sections.start));
         }
         if (sections.import) {
             this.imports = read.vector(new BytesView(sections.import), readImport);
@@ -55,11 +55,10 @@ export class WasmFormat extends AbstractFormat {
             const signatureIndices = read.vector(new BytesView(sections.function), read.vu32);
             this.functions = read.vector<wasm.Function>(new BytesView(sections.code), (v, i) => {
                 const fv = new BytesView(read.bytes(v));
-    
                 return {
                     signatureIndex: signatureIndices[i],
-                    locals: read.vector<wasm.ValueType[]>(fv, () => {
-                        return Array<wasm.ValueType>(read.vu32(fv)).fill(read.i8(fv));
+                    locals: read.vector(fv, () => {
+                        return Array<wasm.ValueType>(read.vu32(fv)).fill(read.i7(fv));
                     }).flat(),
                     body: readInstructionExpression(fv)
                 }
@@ -89,75 +88,78 @@ export class WasmFormat extends AbstractFormat {
             raw.memory = v.bytes.subarray(0, v.at);
         } else raw.memory = null;
     
-        // if (fmt.globals.length) {
-        //     const v = new BytesView();
-        //     write.vector(v, fmt.globals, writeGlobal);
-        //     raw.global = v.bytes.subarray(0, v.at);
-        // } else raw.global = null;
+        if (this.globals.length) {
+            const v = new BytesView();
+            write.vector(v, this.globals, writeGlobal);
+            raw.global = v.bytes.subarray(0, v.at);
+        } else raw.global = null;
+
+        if (this.elements.length) {
+            const v = new BytesView();
+            write.vector(v, this.elements, writeElementSegment);
+            raw.element = v.bytes.subarray(0, v.at);
+        } else raw.element = null;
     
-        // if (fmt.elements.length) {
-        //     const v = new BytesView();
-        //     write.vector(v, fmt.elements, writeElementSegment);
-        //     raw.element = v.bytes.subarray(0, v.at);
-        // } else raw.element = null;
+        if (this.datas.length) {
+            const v = new BytesView();
+            write.vector(v, this.datas, writeDataSegment);
+            raw.data = v.bytes.subarray(0, v.at);
+        } else raw.data = null;
     
-        // if (fmt.datas.length) {
-        //     const v = new BytesView();
-        //     write.vector(v, fmt.datas, writeDataSegment);
-        //     raw.data = v.bytes.subarray(0, v.at);
-        // } else raw.data = null;
+        if (this.start !== undefined) {
+            const v = new BytesView();
+            write.vu32(v, this.start);
+            raw.start = v.bytes.subarray(0, v.at);
+        } else raw.start = null;
     
-        // if (fmt.start !== undefined) {
-        //     const v = new BytesView();
-        //     write.u32(v, fmt.start);
-        //     raw.start = v.bytes.subarray(0, v.at);
-        // } else raw.start = null;
+        if (this.imports.length) {
+            const v = new BytesView();
+            write.vector(v, this.imports, writeImport);
+            raw.import = v.bytes.subarray(0, v.at);
+        } else raw.import = null;
     
-        // if (fmt.imports.length) {
-        //     const v = new BytesView();
-        //     write.vector(v, fmt.imports, writeImport);
-        //     raw.import = v.bytes.subarray(0, v.at);
-        // } else raw.import = null;
-    
-        // if (fmt.exports.length) {
-        //     const v = new BytesView();
-        //     write.vector(v, fmt.exports, writeExport);
-        //     raw.export = v.bytes.subarray(0, v.at);
-        // } else raw.export = null;
-    
-        // if (fmt.functions.length) {
-        //     const v = new BytesView();
-        //     const signatureIndices = fmt.functions.map(f => f.signatureIndex);
-        //     write.vector(v, signatureIndices, write.vu32);
-        //     raw.function = v.bytes.subarray(0, v.at);
-    
-        //     const v2 = new BytesView();
-        //     for (const f of fmt.functions) {
-        //         const v = new BytesView();
-                
-        //         const localsPacked: [wasm.ValueType, number][] = [];
-        //         let lastType: wasm.ValueType | null = null;
-        //         for (const local of f.locals) {
-        //             if (local === lastType) {
-        //                 localsPacked[localsPacked.length - 1][1]++;
-        //             } else {
-        //                 localsPacked.push([local, 1]);
-        //                 lastType = local;
-        //             }
-        //         }
-    
-        //         write.vector(v, localsPacked, (v, [type, count]) => {
-        //             write.vu32(v, count);
-        //             write.i8(v, type);
-        //         });
-        //         writeInstructionExpression(v, f.body);
-    
-        //         write.bytes(v2, v.bytes.subarray(0, v.at));
-        //     }
-        // } else {
-        //     raw.function = null;
-        //     raw.code = null;
-        // }
+        if (this.exports.length) {
+            const v = new BytesView();
+            write.vector(v, this.exports, writeExport);
+            raw.export = v.bytes.subarray(0, v.at);
+        } else raw.export = null;
+
+        if (this.functions.length) {
+            const sigsV = new BytesView();
+            write.vector(sigsV, this.functions, (v, func) => {
+                write.vu32(v, func.signatureIndex);
+            });
+            raw.function = sigsV.bytes.subarray(0, sigsV.at);
+
+
+            const codesV = new BytesView();
+            write.vector(codesV, this.functions, (codesV, func) => {
+                const v = new BytesView();
+
+                // Pack locals into pairs of type and count
+                const localsPacked: [wasm.ValueType, number][] = [];
+                let lastType: wasm.ValueType | null = null;
+                for (const local of func.locals) {
+                    if (local === lastType) {
+                        localsPacked[localsPacked.length - 1][1]++;
+                    } else {
+                        localsPacked.push([local, 1]);
+                        lastType = local;
+                    }
+                }
+
+                write.vector(v, localsPacked, (v, [type, count]) => {
+                    write.vu32(v, count);
+                    write.i7(v, type);
+                });
+                writeInstructionExpression(v, func.body);
+                write.bytes(codesV, v.bytes.subarray(0, v.at));
+            });
+            raw.code = codesV.bytes.subarray(0, codesV.at);
+        } else {
+            raw.function = null;
+            raw.code = null;
+        }
     
         kit.raw().compile();
     }    
@@ -191,28 +193,28 @@ const readSignature = (v: BytesView): wasm.FuncSignature => {
     logging.assert(read.u8(v) === 0x60, "Invalid function signature");
 
     return {
-        params: read.vector<wasm.ValueType>(v, read.i8),
-        results: read.vector<wasm.ValueType>(v, read.i8)
+        params: read.vector<wasm.ValueType>(v, read.i7),
+        results: read.vector<wasm.ValueType>(v, read.i7)
     }
 }
 
 const writeSignature = (v: BytesView, sig: wasm.FuncSignature): void => {
     write.u8(v, 0x60);
-    write.vector(v, sig.params, write.i8);
-    write.vector(v, sig.results, write.i8);
+    write.vector(v, sig.params, write.i7);
+    write.vector(v, sig.results, write.i7);
 }
 
 
 
 const readTable = (v: BytesView): wasm.TableType => {
     return {
-        refType: read.i8(v),
+        refType: read.i7(v),
         limits: readLimits(v)
     }
 }
 
 const writeTable = (v: BytesView, table: wasm.TableType): void => {
-    write.i8(v, table.refType);
+    write.i7(v, table.refType);
     writeLimits(v, table.limits);
 }
 
@@ -231,7 +233,7 @@ const writeMemory = (v: BytesView, memory: wasm.MemoryType): void => {
 
 
 const readGlobalType = (v: BytesView): wasm.GlobalType => {
-    const valueType = read.i8(v);
+    const valueType = read.i7(v);
     const flags = read.vu32(v);
 
     return {
@@ -241,7 +243,7 @@ const readGlobalType = (v: BytesView): wasm.GlobalType => {
 }
 
 const writeGlobalType = (v: BytesView, type: wasm.GlobalType): void => {
-    write.i8(v, type.valueType);
+    write.i7(v, type.valueType);
     write.vu32(v, type.mutable ? 1 : 0);
 }
 
@@ -279,7 +281,7 @@ const readElementSegment = (v: BytesView): wasm.ElementSegment => {
         segment.mode === wasm.ElementSegmentMode.Declarative
     ) {
         if (maybeNotFuncref) {
-            segment.type = read.i8(v);
+            segment.type = read.i7(v);
         } else {
             logging.assert(read.u8(v) === 0, "Expected element kind to be 0");
             segment.type = wasm.RefType.FuncRef;
@@ -295,7 +297,7 @@ const readElementSegment = (v: BytesView): wasm.ElementSegment => {
         segment.offset = readInstructionExpression(v);
         
         if (maybeNotFuncref) {
-            segment.type = read.i8(v);
+            segment.type = read.i7(v);
         } else {
             logging.assert(read.u8(v) === 0, "Expected element kind to be 0");
             segment.type = wasm.RefType.FuncRef;
@@ -322,7 +324,7 @@ const writeElementSegment = (v: BytesView, segment: wasm.ElementSegment): void =
         segment.mode === wasm.ElementSegmentMode.Declarative
     ) {
         if (notFuncRef) {
-            write.i8(v, segment.type);
+            write.i7(v, segment.type);
         } else {
             write.u8(v, 0);
         }
@@ -333,7 +335,7 @@ const writeElementSegment = (v: BytesView, segment: wasm.ElementSegment): void =
         writeInstructionExpression(v, segment.offset);
 
         if (notFuncRef) {
-            write.i8(v, segment.type);
+            write.i7(v, segment.type);
         } else {
             write.u8(v, 0);
         }
