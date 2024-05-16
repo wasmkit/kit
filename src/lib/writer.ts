@@ -36,7 +36,7 @@ export const u8 = (view: BytesView, value: number): void => {
 export const i8 = (view: BytesView, value: number): void => {
     if (!hasSpace(view, 1)) expand(view);
 
-    view.bytes[view.at++] = value;
+    view.bytes[view.at++] = (value << 25) >>> 25;
 }
 
 export const u32 = (view: BytesView, value: number): void => {
@@ -51,7 +51,7 @@ export const vi32 = (view: BytesView, value: number): void => {
     // Should be just to 5, 6 in case
     if (!hasSpace(view, 6)) expand(view);
 
-    while (value) {
+    while (true) {
         let byte = value & 0x7F;
 
         value >>= 7;
@@ -59,6 +59,8 @@ export const vi32 = (view: BytesView, value: number): void => {
         // TODO: Optimize
         if ((value === -1 && (byte & 0x40)) || (value === 0 && !(byte & 0x40))) {
             view.bytes[view.at++] = byte;
+
+            break;
         } else {
             view.bytes[view.at++] = byte | 0x80;
         }
@@ -69,12 +71,17 @@ export const vu32 = (view: BytesView, value: number): void => {
     // Should be just to 5, 6 in case
     if (!hasSpace(view, 6)) expand(view);
 
-    while (value) {
+    while (true) {
         let byte = value & 0x7F;
 
         value >>= 7;
 
-        view.bytes[view.at++] = byte | (value === 0 ? 0x00 : 0x80);
+        if (value === 0) {
+            view.bytes[view.at++] = byte;
+            break;
+        } else {
+            view.bytes[view.at++] = byte | 0x80;
+        }
     }
 }
 
@@ -82,7 +89,7 @@ export const vi64 = (view: BytesView, value: bigint): void => {
     // Should be just to 9, 10 in case
     if (!hasSpace(view, 10)) expand(view);
 
-    while (value !== 0n) {
+    while (true) {
         let byte = Number(value & 0x7Fn);
 
         value >>= 7n;
@@ -90,6 +97,7 @@ export const vi64 = (view: BytesView, value: bigint): void => {
         // TODO: Optimize
         if ((value === -1n && (byte & 0x40)) || (value === 0n && !(byte & 0x40))) {
             view.bytes[view.at++] = byte;
+            break;
         } else {
             view.bytes[view.at++] = byte | 0x80;
         }
@@ -101,6 +109,7 @@ export const f32 = (view: BytesView, value: number): void => {
 
     c_f32[0] = value;
     view.bytes.set(c_u8.subarray(0, 4), view.at);
+    view.at += 4;
 }
 
 export const f64 = (view: BytesView, value: number): void => {
@@ -108,6 +117,7 @@ export const f64 = (view: BytesView, value: number): void => {
 
     c_f64[0] = value;
     view.bytes.set(c_u8.subarray(0, 8), view.at);
+    view.at += 8;
 }
 
 export const string = (view: BytesView, value: string): void => {
