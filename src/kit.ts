@@ -1,7 +1,7 @@
 import fmt from "./formats/"
 import { AbstractFormat, kInvalidateInternal, kIsInvalidInternal } from "./formats/abstract";
-import * as raw from "./formats/raw";
-import * as wasm from "./formats/wasm";
+import { RawFormat } from "./formats/raw";
+import { WasmFormat } from "./formats/wasm";
 
 import { BinaryLike, getBytesFromBinary } from "./lib/binary";
 import * as logging from "./lib/logging";
@@ -23,11 +23,13 @@ export class Kit {
     }
 
     public readonly bytes: Uint8Array;
+    public readonly fmt: typeof fmt;
     private _formatCache: MapByFormatDeclaration;
     
     private constructor(bytes: Uint8Array) {
         this._formatCache = new Map();
         this.bytes = new Uint8Array(bytes);
+        this.fmt = fmt;
     }
 
     public loadBytes(bytes: Uint8Array): void {
@@ -40,7 +42,7 @@ export class Kit {
 
         this._formatCache.clear();
     }
-    
+
     public as<
         FF extends typeof AbstractFormat
     >(Format: FF, options?: any): InstanceType<FF> {
@@ -66,6 +68,6 @@ export class Kit {
         return mod;
     }
 
-    public raw(): raw.RawFormat { return this.as(fmt.raw); }
-    public wasm(): wasm.WasmFormat { return this.as(fmt.wasm); }
+    public raw(): RawFormat { return this.as(fmt.raw); }
+    public wasm(): WasmFormat { return this.as(fmt.wasm); }
 }    

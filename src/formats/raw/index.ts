@@ -30,7 +30,7 @@ type SectionName = Uncapitalize<Exclude<keyof typeof SectionId, "kMax">>;
 type KnownSectionName = Exclude<SectionName, "custom">;
 type SectionRecords = Record<KnownSectionName, Uint8Array | null> & { custom: Map<string, Uint8Array> };
 
-interface Metadata {
+type Metadata = {
     magic: typeof FILE_MAGIC;
     version: typeof FILE_VERSION;
 }
