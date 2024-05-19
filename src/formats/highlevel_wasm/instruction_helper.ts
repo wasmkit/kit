@@ -11,7 +11,7 @@ import { InstructionType as InstrType } from "./types";
  * Contains all information relevant / needed
  * to process a given wasm instruction.
  */
-export interface IntructionParsingContext {
+export type IntructionParsingContext = {
     /**
      * Keeps track of blocks in the control flow
      * that can be branched out of with br.
