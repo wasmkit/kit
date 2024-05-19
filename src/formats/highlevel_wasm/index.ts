@@ -5,6 +5,7 @@ import * as wasm from "../wasm/types";
 import * as hl_wasm from "./types";
 
 import { getInstructionExpression } from "./instruction";
+import { doInstructionTraverse } from "./instruction_traverse";
 
 export class HighlevelFormat extends AbstractFormat {
     /**
@@ -49,6 +50,13 @@ export class HighlevelFormat extends AbstractFormat {
     public start?: number;
 
 
+
+    // Post order
+    public traverseInstruction(
+        root: hl_wasm.Instruction, cb: (instr: hl_wasm.Instruction) => void
+    ): void {
+        doInstructionTraverse(root, cb);
+    }
 
     public getFunction(index: number): hl_wasm.Function {
         return this.functions[index];
