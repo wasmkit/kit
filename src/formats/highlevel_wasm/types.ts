@@ -169,7 +169,8 @@ export type Instruction = {
         offset: number;
         address: Instruction;
         value: Instruction;
-        signature: wasm.ValueType;
+        signature: null;
+        valueType: wasm.ValueType;
     }>
   | DeclInstrType<InstructionType.Const, {
         signature: Omit<wasm.ValueType, wasm.ValueType.ExternRef | wasm.ValueType.V128>;

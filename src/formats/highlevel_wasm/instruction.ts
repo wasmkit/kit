@@ -535,12 +535,13 @@ const tryConsumeStore = (
 
     const { align, offset } = instr.immediates.memoryArgument!;
 
-    const address = popNonVoidExpression(ctx);
     const value = popNonVoidExpression(ctx);
+    const address = popNonVoidExpression(ctx);
 
     pushExpression(ctx, {
         type: hl_wasm.InstructionType.Store,
-        signature: valueType,
+        valueType,
+        signature: null,
         address,
         byteCount,
         offset,
