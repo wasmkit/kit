@@ -26,7 +26,7 @@ if (LLVMModule.COMPILEABLE) {
 
 Before this is fully doable, efforts must be focused on better struct finding algos (will need a Format that disassembles into an SSA view first). For this reason, we are currently at a somewhat unusable state besides basic wasm parsing.
 
-# Language Choice
+## Language Choice
 
 We wanted something that would be easy for people to contribute to. We wanted something that could easily be integrated to Web as well as backend analysis.
 
