@@ -31,6 +31,7 @@ export class HighlevelFormat extends AbstractFormat {
      * - Imported functions have their body set to null
      */
     public functions: hl_wasm.Function[] = [];
+    public importedFunctionCount: number = 0;
 
     /**
      * Contains all elements segments known to the module
@@ -101,7 +102,7 @@ export class HighlevelFormat extends AbstractFormat {
             digestGlobal(this, wasmFmt, wasmGlobal);
         }
     
-        const preWasmFunctionCount = this.functions.length;
+        this.importedFunctionCount = this.functions.length;
     
         for (const wasmFunction of wasmFmt.functions) {
             digestFunction(this, wasmFmt, wasmFunction);
@@ -109,7 +110,7 @@ export class HighlevelFormat extends AbstractFormat {
     
         for (let i = 0; i < wasmFmt.functions.length; ++i) {
             const wasmFunction = wasmFmt.functions[i];
-            const hlFunction = this.functions[preWasmFunctionCount + i];
+            const hlFunction = this.functions[this.importedFunctionCount + i];
     
             digestInstructions(this, wasmFmt, hlFunction, wasmFunction.body);
         }
