@@ -6,13 +6,33 @@ I.E given an emscripten wasm file, the user parses with the `emsc` format. The `
 
 It will not stop at `emsc`, for ex unity could extend that. Contribution is welcome to create more advanced layers.
 
+Exsample code:
+
+```ts
+const kit = wasmkit(wasm_file);
+
+const raw = kit.raw();
+const wasm = kit.wasm();
+const llvm = kit.as(LLVMModule, { options }); // iirc this has changed a bit since this demo was written
+
+if (LLVMModule.COMPILEABLE) {
+    llvm.funcs[0].shadowStack.size += 4;
+
+    llvm.compile();
+}
+```
+
 ## TODO
 
 Before this is fully doable, efforts must be focused on better struct finding algos (will need a Format that disassembles into an SSA view first). For this reason, we are currently at a somewhat unusable state besides basic wasm parsing.
 
+# Language Choice
+
+We wanted something that would be easy for people to contribute to. We wanted something that could easily be integrated to Web as well as backend analysis.
+
 ## Speed
 
-The systems explained above parse 100% of the binary, to enhance speed we will selective parsing of only user-requested data, but there is also the possibility of off-thread parsing.
+The systems explained above parse 100% of the binary, which is slow especially given the fact we have written this in TypeScript. To enhance speed we will allow for selective parsing of only user-requested data, but there is also the possibility of off-thread parsing.
 
 ## Maintainability
 
