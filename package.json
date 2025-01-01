@@ -1,6 +1,6 @@
 {
     "name": "wasmkit",
-    "version": "2.0.0",
+    "version": "2.0.2",
     "description": "WASM extension and instrumentation toolkit",
     "files": [
         "dist",
@@ -28,7 +28,6 @@
         "rimraf": "^5.0.5",
         "typescript": "^5.3.3"
     },
-    "dependencies": {},
     "repository": "https://github.com/wasmkit/kit",
     "bugs": "https://github.com/wasmkit/kit/issues",
     "homepage": "https://github.com/wasmkit/kit#readme",

@@ -8,6 +8,10 @@ export type FormatCtor<
 export const kInvalidateInternal = Symbol("kInvalidate");
 export const kIsInvalidInternal = Symbol("kIsInvalidated");
 
+export type AbstractWriteable = {
+    write(chunk: string | Uint8Array): void;    
+}
+
 export class AbstractFormat {
     public kit: Kit;
     public options: any;
@@ -25,7 +29,7 @@ export class AbstractFormat {
         throw logging.fatal("Extract not implemented");
     }
 
-    public print(): string {
+    public print(_writer: AbstractWriteable): void {
         throw logging.fatal("Extract not implemented");
     }
 

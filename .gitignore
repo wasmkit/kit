@@ -1,6 +1,7 @@
+.yarn/*
 node_modules/
 dist/**
-# !dist/browser
-# !dist/browser/bundle.js
+!dist/browser
+!dist/browser/bundle.js
 
 .vscode
