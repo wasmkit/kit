@@ -25,7 +25,7 @@ export class AbstractFormat {
         throw logging.fatal("Extract not implemented");
     }
 
-    public print(): void {
+    public print(): string {
         throw logging.fatal("Extract not implemented");
     }
 
